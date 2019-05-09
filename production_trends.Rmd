@@ -1,0 +1,111 @@
+---
+title: "Production trends"
+author: "Richard Cottrell"
+date: "10 May 2019"
+output: html_document
+---
+
+#libraries
+```{r}
+library(data.table)
+library(tidyverse)
+
+
+```
+
+#FED SPP LIST
+```{r}
+
+fed_spp <- 
+  fread("fed_spp.csv", header=T)%>%
+  rename(Species="Name_en") %>% 
+  group_by(Species) %>%
+  mutate(id = row_number()) 
+
+positions <- c(4:18)
+
+all_spp <- 
+  fread("unfed_spp.csv", header=T) %>% 
+  rename(Species = "Name_en") %>% 
+  filter(!(Species %in% fed_spp$Species))
+  
+
+```
+
+#Production data
+```{r}
+
+#Sort the symbols in values out
+## "..." = data unavailable
+## " " = data not separately available
+## "-" = nil or zero
+## "0 0" = more than zero but less than half the unit used
+## F = FAO estimate from available sources of information
+
+
+
+
+
+fed_aqua_prod <- 
+  fread("aquaculture-prod-raw.csv", header=T) %>% 
+  rename(Country="Country (Country)",
+         Species="Species (ASFIS species)" ,
+         Area="Aquaculture area (FAO major fishing area)",
+         Environment="Environment (Environment)")%>% 
+  gather(Year, Value, -c(Country, Species, Area, Environment, Unit)) %>% 
+  mutate(Year = gsub("X", "", Year) %>% 
+           as.numeric) %>% 
+  mutate(Value = case_when(Value=="0 0" ~ "0.2",
+                           Value=="-" ~ "0",
+                           T ~ Value)) %>% 
+  filter(!(Value=="..." | Value=="") | Country=="Totals") %>% 
+  mutate(Value = gsub(" F", "", Value) %>% 
+           as.numeric) %>%
+  select(-Unit) %>% 
+  group_by(Country, Species, Area, Year, Environment) %>%
+  mutate(id= row_number()) %>% 
+  filter(Species %in% fed_spp$Species) %>% 
+  left_join(.,fed_spp, by=c("Species", "id"))%>% 
+  mutate(Taxa_adj = case_when(Taxa %in% c("Smelts") ~ "Other",
+                              Taxa %in% c("Flatfishes","Marine fishes","Cods") ~ "Marine fishes",
+                              Species %in% c("Flathead grey mullet" ,"Squaretail mullet",  "So-iuy mullet", "Lebranche mullet" )~ "Mullets",
+                              Taxa == "Shrimps" ~ "Shrimps",
+                              Taxa == "Carps" ~ "Carps",
+                              Taxa == "FW fishes" ~ "FW fishes",
+                              Taxa == "FW crustaceans" ~ "FW crustaceans",
+                              Taxa == "Marine crustaceans" ~ "Other",
+                              Taxa == "Diadromous fishes" ~ "Diadromous fishes",
+                              Species=="Milkfish" ~ "Milkfish",
+                              Taxa == "Tilapias" ~ "Tilapias",
+                              Taxa == "Eels" ~ "Other",
+                              Taxa == "Shads" ~ "Other",
+                              Taxa == "Tunas" ~ "Other",
+                              T ~ Taxa)) 
+
+
+
+
+unfed_aqua_prod <- 
+  fread("aquaculture-prod-raw.csv", header=T) %>% 
+  rename(Country="Country (Country)",
+         Species="Species (ASFIS species)" ,
+         Area="Aquaculture area (FAO major fishing area)",
+         Environment="Environment (Environment)")%>% 
+  gather(Year, Value, -c(Country, Species, Area, Environment, Unit)) %>% 
+  mutate(Year = gsub("X", "", Year) %>% 
+           as.numeric) %>% 
+  mutate(Value = case_when(Value=="0 0" ~ "0.2",
+                           Value=="-" ~ "0",
+                           T ~ Value)) %>% 
+  filter(!(Value=="..." | Value=="") | Country=="Totals") %>% 
+  mutate(Value = gsub(" F", "", Value) %>% 
+           as.numeric) %>%
+  select(-Unit) %>% 
+  group_by(Country, Species, Area, Year, Environment) %>%
+  mutate(id= row_number()) %>% 
+  filter(!(Species %in% fed_spp$Species))
+
+
+
+
+```
