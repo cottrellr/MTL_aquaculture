@@ -8,9 +8,10 @@ output: html_document
 #libraries
 ```{r}
 library(data.table) 
+library(ggpubr)
+library(ggsci)
 library(tidyverse)
-
-
+library(wesanderson)
 ```
 
 #FED SPP LIST
@@ -22,12 +23,16 @@ fed_spp <-
   group_by(Species) %>%
   mutate(id = row_number()) 
 
+
+
 positions <- c(4:18)
 
 all_spp <- 
-  fread("unfed_spp.csv", header=T) %>% 
-  rename(Species = "Name_en") %>% 
+  fread("all_spp.csv", header=T) %>% 
+  rename(Species = "Name_en")%>% 
   filter(!(Species %in% fed_spp$Species))
+
+
   
 
 ```
@@ -46,7 +51,7 @@ all_spp <-
 
 
 
-fed_aqua_prod <- 
+(fed_aqua_prod <- 
   fread("aquaculture-prod-raw.csv", header=T) %>% 
   rename(Country="Country (Country)",
          Species="Species (ASFIS species)" ,
@@ -58,7 +63,7 @@ fed_aqua_prod <-
   mutate(Value = case_when(Value=="0 0" ~ "0.2",
                            Value=="-" ~ "0",
                            T ~ Value)) %>% 
-  filter(!(Value=="..." | Value=="") | Country=="Totals") %>% 
+  filter(!(Value=="..." | Value=="" | Country=="Totals")) %>% 
   mutate(Value = gsub(" F", "", Value) %>% 
            as.numeric) %>%
   select(-Unit) %>% 
@@ -80,12 +85,16 @@ fed_aqua_prod <-
                               Taxa == "Eels" ~ "Other",
                               Taxa == "Shads" ~ "Other",
                               Taxa == "Tunas" ~ "Other",
-                              T ~ Taxa)) 
+                              T ~ Taxa)) %>% 
+   select(Country, Species, Area, Environment, Year, Value, Group, ISSCAAP_Group) %>% 
+   mutate(Group = case_when(Group == "PISCES" ~ "Fed Finfish",
+                            Group == "CRUSTACEA" ~ "Fed Crustaceans"))
+   
+)
 
 
 
-
-unfed_aqua_prod <- 
+(unfed_aqua_prod <- 
   fread("aquaculture-prod-raw.csv", header=T) %>% 
   rename(Country="Country (Country)",
          Species="Species (ASFIS species)" ,
@@ -97,15 +106,80 @@ unfed_aqua_prod <-
   mutate(Value = case_when(Value=="0 0" ~ "0.2",
                            Value=="-" ~ "0",
                            T ~ Value)) %>% 
-  filter(!(Value=="..." | Value=="") | Country=="Totals") %>% 
+  filter(!(Value=="..." | Value==""| Country=="Totals")) %>% 
   mutate(Value = gsub(" F", "", Value) %>% 
            as.numeric) %>%
   select(-Unit) %>% 
   group_by(Country, Species, Area, Year, Environment) %>%
   mutate(id= row_number()) %>% 
-  filter(!(Species %in% fed_spp$Species))
+  filter(!(Species %in% fed_spp$Species)) %>% 
+  left_join(all_spp, by="Species") %>% 
+  select(Country, Species, Area, Environment, Year, Value, Major_Group, ISSCAAP_Group) %>% 
+  mutate(ISSCAAP_Group = case_when(Species=="[Haematococcus pluvialis]" ~ "Green seaweeds",
+                                   Species %in% c("[Spirulina platensis]",  "[Spirulina maxima]") ~ "Bacteria",
+                                   Species %in% c("[Carassius spp]", "[Oreochromis tanganicae]" ) ~ "Carps, barbels and other cyprinids",
+                                   Species == "[Sargassum spp]" ~ "Brown seaweeds",
+                                   Species %in% c("[Brycon cephalus]","[Brycon hilarii]", "[Osteobrama belangeri]",
+                                                  "[Ichthyoelephas humeralis]","[Anostomoides laticeps]", "[Prochilodus mariae]", 
+                                                  "[Channa marulius]", "[Labeo dussumieri]",
+                                                  "[Pimelodus spp]" ,"[Brycon amazonicus]", "[Brycon spp]",
+                                                  "[Leporinus spp]", "[Leporinus obtusidens]",
+                                                  "[Cichla spp]" , "[Hoplias spp]", "[Hypsibarbus spp]" ,
+                                                  "[Wallago spp]" ,"[Brycon orbignyanus]" )  ~ "Miscellaneous freshwater fishes",
+                                   Species == "[Solea spp]" ~ "Miscellaneous demersal fishes" ,
+                                   Species %in% c("[Porphyra columbina]", "[Chondracanthus chamissoi]" ) ~ "Red seaweeds",
+                                   TRUE ~ ISSCAAP_Group)) %>% 
+  mutate(Major_Group = case_when(Species=="[Haematococcus pluvialis]" ~ "PLANTAE AQUATICAE",
+                                 Species %in% c("[Spirulina platensis]",  "[Spirulina maxima]") ~ "PROKARYOTA",
+                                 Species %in% c("[Carassius spp]", "[Oreochromis tanganicae]" ) ~ "UNFED PISCES",
+                                 Species == "[Sargassum spp]" ~ "PLANTAE AQUATICAE",
+                                 Species %in% c("[Brycon cephalus]","[Brycon hilarii]", "[Osteobrama belangeri]",
+                                                "[Ichthyoelephas humeralis]","[Anostomoides laticeps]", "[Prochilodus mariae]", 
+                                                "[Channa marulius]", "[Labeo dussumieri]",
+                                                "[Pimelodus spp]" ,"[Brycon amazonicus]", "[Brycon spp]",
+                                                "[Leporinus spp]", "[Leporinus obtusidens]",
+                                                "[Cichla spp]" , "[Hoplias spp]", "[Hypsibarbus spp]" ,
+                                                "[Wallago spp]" ,"[Brycon orbignyanus]" )  ~ "UNFED PISCES",
+                                 Species == "[Solea spp]" ~ "UNFED PISCES" ,
+                                 Species %in% c("[Porphyra columbina]", "[Chondracanthus chamissoi]" ) ~ "UNFED PISCES",
+                                 Major_Group =="PISCES" ~ "UNFED PISCES",
+                                 TRUE ~ Major_Group)) %>% 
+    rename(Group = Major_Group) %>% 
+    mutate(Group = case_when(Group == "UNFED PISCES" ~ "Unfed finfish",
+                             Group == "MOLLUSCA" ~ "Molluscs",
+                             Group == "AMPHIBIA, REPTILIA" ~ "Amphibians & reptiles",
+                             Group == "PLANTAE AQUATICAE" ~ "Aquatic plants",
+                             Group == "PROKARYOTA" ~ "Bacteria",
+                             Group == "INVERTEBRATA AQUATICA" ~ "Other aquatic invertebrates",
+                             Group == "CRUSTACEA" ~ "Unfed crustaceans" ))
+  )                           
 
 
 
+(total_aqua_prod <-
+    bind_rows(
+      fed_aqua_prod, unfed_aqua_prod
+    ) %>% 
+    group_by(Group, Year) %>% 
+    summarise(Value=sum(Value)) %>% 
+    filter(Group!="Unfed crustaceans") %>% 
+    ggplot(aes(x=Year, y=Value)) + 
+    geom_area(aes(fill=Group))+
+    scale_x_continuous(limits=c(1960,2020))+
+    theme_pubr()+
+    theme(
+      legend.position = "bottom",
+      legend.title = element_blank()
+    )+
+    scale_fill_futurama()
+)
 
+
+
+bind_rows(
+      fed_aqua_prod, unfed_aqua_prod
+    ) %>% 
+    group_by(Group, Year) %>% 
+    summarise(Value=sum(Value)) %>% 
+  arrange(-Value)
 ```
