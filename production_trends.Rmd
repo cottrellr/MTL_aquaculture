@@ -12,6 +12,7 @@ library(ggpubr)
 library(ggsci)
 library(tidyverse)
 library(wesanderson)
+library(RColorBrewer)
 ```
 
 #FED SPP LIST
@@ -163,23 +164,33 @@ all_spp <-
     group_by(Group, Year) %>% 
     summarise(Value=sum(Value)) %>% 
     filter(Group!="Unfed crustaceans") %>% 
+    ungroup() %>% 
+    mutate(Group = factor(Group, levels=c("Aquatic plants", "Molluscs", "Bacteria", "Amphibians & reptiles", "Other aquatic invertebrates","Unfed finfish","Fed Crustaceans" , "Fed Finfish"))) %>% 
     ggplot(aes(x=Year, y=Value)) + 
     geom_area(aes(fill=Group))+
-    scale_x_continuous(limits=c(1960,2020))+
+    #scale_x_continuous(limits=c(1960,2020))+
+    scale_y_continuous(labels = c(0, 25, 50, 75, 100))+
+    labs(y=bquote(Biomass~(million~tonnes)))+
     theme_pubr()+
     theme(
-      legend.position = "bottom",
-      legend.title = element_blank()
+      legend.position = c(0.4, 0.85),
+      legend.title = element_blank(),
+      text = element_text(size=8),
+      legend.text = element_text(size=7),
+      legend.key.size = unit(0.4, "cm")
     )+
-    scale_fill_futurama()
-)
+    scale_fill_manual(values = brewer.pal(name="Spectral", n=8))+
+    guides(fill= guide_legend(ncol=2))
+)+
+  ggsave("Production trends.tiff", device = "tiff", dpi=300, width=10, height = 7.5, units = "cm")+
+  ggsave("Production trends.pdf", device = "pdf", dpi=300, width=10, height = 7.5, units = "cm")
 
 
 
-bind_rows(
+unique((bind_rows(
       fed_aqua_prod, unfed_aqua_prod
     ) %>% 
     group_by(Group, Year) %>% 
     summarise(Value=sum(Value)) %>% 
-  arrange(-Value)
+  arrange(-Value))$Group)
 ```
