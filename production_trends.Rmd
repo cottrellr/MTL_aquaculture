@@ -24,7 +24,7 @@ library(LaCroixColoR)
 ```
 
 #FED SPP LIST
-```{r}
+```{r} 
 
 fed_spp <- 
   fread("fed_spp.csv", header=T)%>%
@@ -207,7 +207,7 @@ unique((bind_rows(
 
 #Fed species by biomass 
 
-```{r}
+```{r} 
 
 fed_prod <- 
   fed_aqua_prod %>% 
@@ -260,6 +260,48 @@ fed_aqua_prod_2 <-
                           ISSCAAP_Group %in% c("Miscellaneous diadromous fishes", "Sturgeons, paddlefishes")~"FW fishes",
                           TRUE ~ Taxa)) 
   
+
+
+#bring in the rendered animal by products from Pahlow
+(by_products <- 
+    fread("diets_pahlow.csv", header = TRUE) %>% 
+    group_by(Taxa) %>% 
+    summarise(Rendered_animal_prop = mean(Prop)) %>% 
+    mutate(Year=2015))
+
+
+
+#MODEL the change in forage fish over all years
+
+(delta_forage_fish <- fread("forage_fish_diets.csv", header=TRUE) %>% 
+    filter(Year!=2020) %>% 
+    left_join(by_products, by=c("Taxa", "Year")) %>% 
+    mutate(FMFO=Total/100) %>% 
+    group_by(Taxa) %>%
+    nest() %>% 
+    mutate(FF_model = map(data, ~(gam(FMFO~s(Year), data = .))))
+  )
+
+
+year_range <- data_frame(Year=seq(1995,2015))
+FF_models <- (delta_forage_fish$FF_model)
+
+
+(feed_change <- data_frame(Taxa = rep(unique(forage_fish$Taxa), each=length(seq(1995,2015)), n=1),
+                           Year = rep(seq(1995, 2015), length(unique(forage_fish$Taxa))),
+                           delta_ff = unlist(lapply(FF_models, function(each_model){
+                             fitted <- predict(each_model, type="response", newdata = year_range)
+                             return(fitted)
+                           })))
+)
+
+
+ggplot(feed_change, aes(Year, delta_ff, colour=Taxa))+geom_line()
+
+
+
+```
+
 
 (forage_fish <- fread("forage_fish_diets.csv", header=TRUE) %>% 
     filter(Year!=2020) %>% 
@@ -423,10 +465,26 @@ TLs %>%
         legend.position = "right", 
         legend.direction = "vertical",
         legend.title = element_blank())+
-  scale_color_manual(values = c("grey20", "dodgerblue3"))
+  scale_color_manual(values = c("grey20", "dodgerblue3"))+
+  ggsave("Fishbase_v_calculated.tiff", device = "tiff", dpi = 300, width=18, height = 12, units = "cm")
   
 
+TLs %>%
+  mutate(Taxa = factor(Taxa, levels = c("Salmons", "Trouts", "Marine fishes", "Shrimps", "Eels", "FW fishes", "Milkfish", "FW crustaceans", "Catfishes", "Tilapias", "Carps"))) %>% 
+  ggplot(aes(x=Year, y=Farmed, colour= Taxa))+
+  geom_line()+
+  theme_bw()+
+  theme(panel.grid = element_blank(), 
+        legend.position = "right", 
+        legend.direction = "vertical",
+        legend.title = element_blank(),
+        legend.key.size = unit(0.2, "cm"))+
+  labs(y="TL")+
+  scale_color_manual(values = lacroix_palette("Tangerine", n=11))+
+  ggsave("calculated only.tiff", device = "tiff", dpi = 300, width=7, height =6, units = "cm")
 
+lacroix_palette("Tangerine", n=11)
 
+lacroix_palettes
 ```
 
