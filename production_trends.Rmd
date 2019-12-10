@@ -21,6 +21,7 @@ library(broom)
 library(tidyverse)
 library(RColorBrewer)
 library(LaCroixColoR)
+library(countrycode)
 ```
 
 #FED SPP LIST
@@ -259,16 +260,42 @@ fed_aqua_prod_2 <-
                           ISSCAAP_Group == "Tunas, bonitos, billfishes" ~ "Marine fishes",
                           ISSCAAP_Group %in% c("Miscellaneous diadromous fishes", "Sturgeons, paddlefishes")~"FW fishes",
                           TRUE ~ Taxa)) 
-  
 
 
-#bring in the rendered animal by products from Pahlow
+#What proportion of global production is EU - should help guide whether we include animal by products for salmon and trout
+
+totals <- fed_aqua_prod_2 %>% 
+  group_by(Taxa, Year) %>% 
+  summarise(Value=sum(Value))
+
+
+EU <- fed_aqua_prod_2 %>% 
+  group_by(Country, Taxa, Year) %>% 
+  summarise(Value=sum(Value)) %>% 
+  mutate(EU = countrycode(Country, origin = "country.name", destination = "eu28", warn=TRUE)) %>% 
+  filter(!is.na(EU) | Country=="Norway") %>% 
+  ungroup() %>% 
+  group_by(Taxa, Year) %>% 
+  summarise(Value=sum(Value)) %>%
+  left_join(totals, by=c("Taxa", "Year")) %>% 
+  mutate(Prop=Value.x/Value.y)
+
+
+ggplot(EU, aes(x=Year, y=Prop, colour=Taxa)) +
+  geom_line()+
+  ggsave("Proportion of global from the EU incl Norway.tiff", device = "tiff", dpi=300, width = 15, height = 12, units = "cm")
+
+
+
+
+#Start bringing diet data together
+
+#rendered animal by products from Pahlow
 (by_products <- 
     fread("diets_pahlow.csv", header = TRUE) %>% 
     group_by(Taxa) %>% 
     summarise(Rendered_animal_prop = mean(Prop)) %>% 
     mutate(Year=2015))
-
 
 
 #MODEL the change in forage fish over all years
@@ -279,46 +306,76 @@ fed_aqua_prod_2 <-
     mutate(FMFO=Total/100) %>% 
     group_by(Taxa) %>%
     nest() %>% 
-    mutate(FF_model = map(data, ~(gam(FMFO~s(Year), data = .))))
+    mutate(FF_model = map(data, ~(gam(FMFO~s(Year), data = .))),
+           Feeds_total = map(data, ~(gam(Feeds_used~s(Year), data = .))))
   )
 
 
+
+#Combine forage fish inclusion and model increase in animal byproduct through time with teh decrease in forage fish
+
 year_range <- data_frame(Year=seq(1995,2015))
 FF_models <- (delta_forage_fish$FF_model)
+Feeds_models <- (delta_forage_fish$Feeds_total)
 
 
-(feed_change <- data_frame(Taxa = rep(unique(forage_fish$Taxa), each=length(seq(1995,2015)), n=1),
-                           Year = rep(seq(1995, 2015), length(unique(forage_fish$Taxa))),
-                           delta_ff = unlist(lapply(FF_models, function(each_model){
+
+exp_function <- function(x){
+  new_data <- data_frame(Year= seq(1995, 2015))
+  fit <- lm(log(x$Rendered_animal_prop)~log(x$Year))
+  fitted <- exp(predict(fit, newdata = new_data))
+  return(fitted)
+}
+
+
+(feed_change <- data_frame(Taxa = rep(unique(delta_forage_fish$Taxa), each=length(seq(1995,2015)), n=1),
+                           Year = rep(seq(1995, 2015), length(unique(delta_forage_fish$Taxa))),
+                           FMFO_inclusion = unlist(lapply(FF_models, function(each_model){
                              fitted <- predict(each_model, type="response", newdata = year_range)
                              return(fitted)
-                           })))
+                           })),
+                           Feeds_Qi = unlist(lapply(Feeds_models, function(each_model){
+                             fitted <- predict(each_model, type="response", newdata = year_range)
+                             return(fitted)
+                           }))) %>% 
+    left_join(by_products, by=c("Taxa", "Year")) %>% 
+    mutate(Rendered_animal_prop = case_when(Year %in% c(1995, 2015) & Taxa %in% c("Carps", "Eels") ~ 0.0001,
+                                            Year ==1995 ~ 0.0005,
+                                            TRUE ~ Rendered_animal_prop)) %>% 
+    group_by(Taxa) %>% 
+    nest() %>% 
+    mutate(Animal_inclusion = map(data,  exp_function)) %>% 
+    unnest() %>% 
+    mutate(Crop_inclusion = 1-(FMFO_inclusion+Animal_inclusion)) %>% 
+    select(Taxa, Year, FMFO_inclusion, Animal_inclusion, Crop_inclusion, Feeds_Qi) %>% 
+    mutate(FMFO_TL = 2.5,
+           Animal_TL = 2.05,
+           Crops_TL = 1,
+           FMFO = Feeds_used*Prop,
+           Qi_Crops = Feeds_used-Qi_FMFO, 
+           Qi_TL_Total = (TL_fish*Qi_FMFO) + (TL_crops*Qi_Crops))
 )
 
 
-ggplot(feed_change, aes(Year, delta_ff, colour=Taxa))+geom_line()
+ggplot(feed_change, aes(Year, Animal_inclusion, colour=Taxa))+geom_line()
+
+
+diets <- fread("forage_fish_diets.csv", header=TRUE)
 
 
 
-```
 
-
-(forage_fish <- fread("forage_fish_diets.csv", header=TRUE) %>% 
+ fread("forage_fish_diets.csv", header=TRUE) %>% 
     filter(Year!=2020) %>% 
     mutate(Feeds_used = Feeds_used*1000,
            Prop=Total/100,
            TL_fish = 2.5,
-           TL_crops = 1,
-           Qi_FMFO = Feeds_used*Prop,
-           Qi_Crops = Feeds_used-Qi_FMFO, 
-           Qi_TL_Total = (TL_fish*Qi_FMFO) + (TL_crops*Qi_Crops),
+           ,
            Taxa_TL = 1+(Qi_TL_Total/Feeds_used)) %>% 
   group_by(Taxa) %>% 
   nest() %>% 
   mutate(TL_model = map(data, ~((mgcv::gam(Taxa_TL~s(Year), data = .))))))
   
-
-
 
 
 
