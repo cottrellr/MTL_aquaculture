@@ -18,6 +18,8 @@ library(mgcv)
 library(ggforce)
 library(ggpubr)
 library(ggsci)
+library(ggExtra)
+library(ggrepel)
 library(purrr)
 library(broom)
 library(tidyverse)
@@ -217,11 +219,25 @@ all_spp <-
   
 )
   
+total <- fed_aqua_prod %>% 
+  filter(grepl("shrimp", Species) & Year == 2017) %>%
+  group_by(Year) %>% 
+  summarise(Value = sum(Value))
+
+
   
+fed_aqua_prod %>% 
+  filter(grepl("Iran", Country) & Year == 2017)
+
+  # group_by(Country) %>% 
+  # summarise(Value=sum(Value)) %>% 
+  # arrange(-Value) %>% 
+  # mutate(Total = total$Value) %>% 
+  # mutate(Prop=Value/Total) %>% 
+  # mutate(Cum = cumsum(Prop))
 
 
-
-
+ # CHina India INdonesia Vietnam Ecuador Thailand
 ```
 
 # Figure - Aquaculture production change 
@@ -256,7 +272,6 @@ all_spp <-
 #Fed species by biomass 
 
 ```{r} 
-
 fed_prod_total <- 
   fed_aqua_prod %>% 
   group_by(Year) %>% 
@@ -592,7 +607,152 @@ ggarrange(salmon_diet_plot, MTL_sensitivity,
   ggsave("Figure - diet and MTL sensitivity.pdf", device ="pdf", dpi=600, width = 18, height= 6, units = "cm")
 
 ``` 
-  
+
+
+# Taxa trends relative to fishbase
+```{r}
+
+(salmons <- common_to_sci(c("Atlantic salmon", "Coho salmon", "Chinook salmon")) %>% slice(1,4,5))
+(trouts <- rfishbase::common_to_sci(c("Rainbow trout", "Clearhead icefish")) %>% slice(2,3))
+carps <- rfishbase::common_to_sci("Grass carp", "Common carp")$Species
+(tilapias <- rfishbase::common_to_sci("Nile tilapia"))
+(catfishes <- rfishbase::common_to_sci(c("Pangas", "Amur catfish", "Channel catfish", "Yellow catfish", "Flathead catfish"))) %>% arrange(Species)
+(marine_fishes <- rfishbase::common_to_sci(c("Amberjack" ,"European seabass")) %>% slice(3,34))
+(fw_fishes <- rfishbase::common_to_sci(c("Snakehead", "Largemouth black bass")))
+(eels <- rfishbase::common_to_sci(c("Asian swamp eel", "Japanese eel")))
+(shrimps <- common_to_sci(c("Whiteleg shrimp", "Fleshy prawn", "Banana prawn", "Giant tiger prawn", "Kuruma prawn"),  server = "sealifebase") %>% slice(1,2,3,6,8))
+(fw_crusts <- common_to_sci(c("Chinese mitten crab", "Red swamp crawfish", "Oriental river prawn", "Giant river prawn"),  server = "sealifebase") %>%
+    drop_na(Species))
+
+
+(Fishbase_TLs <-
+    bind_rows(
+
+      (Salmons <-  ecology(salmons$Species) %>%
+         select(Species, DietTroph, FoodTroph) %>%
+         filter(!(is.na(DietTroph) & is.na(FoodTroph))) %>%
+         mutate(Taxa="Salmons")),
+
+
+      (Trouts <- rfishbase::ecology(trouts$Species) %>%
+         select(Species, DietTroph, FoodTroph) %>%
+         filter(!(is.na(DietTroph) & is.na(FoodTroph))) %>%
+         mutate(Taxa="Trouts")),
+
+
+      (Carps <- rfishbase::ecology(carps) %>%
+         select(Species, DietTroph, FoodTroph) %>%
+         filter(!(is.na(DietTroph) & is.na(FoodTroph))) %>%
+         mutate(Taxa="Carps")),
+
+
+
+      (Tilapias <- rfishbase::ecology(tilapias$Species) %>%
+         select(Species,DietTroph, FoodTroph) %>%
+         filter(!(is.na(DietTroph) & is.na(FoodTroph))) %>%
+         mutate(Taxa="Tilapias")),
+
+
+      (Catfishes <- rfishbase::ecology(catfishes$Species) %>%
+         select(Species, DietTroph,  FoodTroph) %>%
+         filter(!(is.na(DietTroph) & is.na(FoodTroph))) %>%
+         mutate(Taxa="Catfishes")),
+
+
+      (Milkfish <- rfishbase::ecology("Chanos chanos") %>%
+         select(Species, DietTroph,  FoodTroph) %>%
+         filter(!(is.na(DietTroph) & is.na(FoodTroph))) %>%
+         mutate(Taxa="Milkfish")),
+
+
+
+      (Marine_fishes <- ecology(marine_fishes$Species) %>%
+         select(Species, DietTroph, FoodTroph) %>%
+         filter(!(is.na(DietTroph) & is.na(FoodTroph))) %>%
+         mutate(Taxa="Marine fishes")),
+
+
+      (FW_fishes <- rfishbase::ecology(fw_fishes$Species) %>%
+         select(Species, DietTroph, FoodTroph) %>%
+         filter(!(is.na(DietTroph) & is.na(FoodTroph))) %>%
+         mutate(Spp = case_when(grepl("hanna", Species) ~ "Snakehead",
+                                TRUE ~ "Blackmouth bass"),
+                FoodTroph = as.numeric(FoodTroph)) %>%
+         group_by(Spp) %>%
+         summarise(FoodTroph=mean(FoodTroph)) %>%
+         mutate(DietTroph = c(3.84, 4.44),
+                Species=Spp) %>%
+         select(Species, DietTroph, FoodTroph) %>%
+         mutate(DietTroph = as.character(DietTroph),
+                FoodTroph = as.character(FoodTroph)) %>%
+         mutate(Taxa = "FW fishes")),
+
+      (Eels <- rfishbase::ecology(eels$Species) %>%
+         select(Species, DietTroph, FoodTroph) %>%
+         mutate(Taxa="Eels")),
+
+
+      (Shrimps <- rfishbase::ecology(shrimps$Species, server = "sealifebase") %>%
+         select(Species, DietTroph, FoodTroph) %>%
+         filter(!(is.na(DietTroph) & is.na(FoodTroph))) %>%
+         mutate(Taxa = "Shrimps")),
+
+
+
+      (FW_crusts <- ecology(fw_crusts$Species, server = "sealifebase") %>%
+         select(Species, DietTroph, FoodTroph) %>%
+         filter(!(is.na(DietTroph) & is.na(FoodTroph))) %>%
+         mutate(Taxa = "FW crustaceans"))
+    ) %>%
+    mutate(TL_final = case_when(!is.na(DietTroph)~ DietTroph,
+                                TRUE ~ FoodTroph),
+           TL_final = as.numeric(TL_final)) %>%
+    group_by(Taxa) %>%
+    summarise(Fishbase =mean(TL_final))
+)
+
+TL_taxa <- fread("forage_fish_diets.csv", header=TRUE) %>% 
+     filter(Year!=2020) %>% 
+     left_join(by_products, by=c("Taxa", "Year")) %>%
+     mutate(FMFO_inclusion=Total/100,
+            Animal_inclusion = case_when(Taxa == "Salmons" ~ 0,
+                                          TRUE ~ Animal_inclusion),
+            Feeds_used = Feeds_used*1000,
+            Prod = Prod*1000,
+            Crop_inclusion = 1-(Animal_inclusion+FMFO_inclusion)) %>% 
+     left_join(forage_TL, by="Year") %>% 
+     mutate(Animal_TL = 2.1,# runif(min =2.0, max =  2.1, n=165),
+            Crop_TL = 1, 
+            TL_taxon_year = (Animal_inclusion*Animal_TL)+ (FMFO_inclusion*FMFO_TL) + (Crop_inclusion*Crop_TL)+1) %>% 
+     left_join(total_prod_year, by="Year") %>% 
+     mutate(MTL = TL_taxon_year*Prod/Total_prod)
+
+
+
+TL_taxa %>%
+  left_join(Fishbase_TLs, by="Taxa") %>%
+  select(Taxa, Year, TL_taxon_year, Fishbase) %>% 
+  rename(Farmed = TL_taxon_year,
+         Wild = Fishbase) %>% 
+  gather(key = "Production_type", value = "MTL", -c(Taxa, Year)) %>%
+  ggplot(aes(x=Year, y=MTL, colour=Production_type, linetype=Production_type))+geom_line()+#geom_point(size=0.6)+
+  facet_wrap(~Taxa, nrow = 2) +
+  theme_bw()+
+  theme(text = element_text(size=10),
+        panel.grid = element_blank(),
+        axis.text.x = element_text(size = 7, hjust=0.8, angle = 45),
+        legend.position = c(0.9, 0.2),
+        legend.direction = "vertical",
+        legend.title = element_blank())+
+  scale_color_manual(values = c("grey20", "dodgerblue3"))+
+  labs(y="Mean trophic level")+
+  ggsave("Fishbase_v_calculated.tiff", device = "tiff", dpi = 300, width=18, height = 12, units = "cm")
+
+
+
+```
+
+
   
 #Figure - clustering of trophic level across taxa
 ```{r}
@@ -621,37 +781,55 @@ FCRs <- fread("eFCRs.csv", header=TRUE)
 
 
 
-ggplot(trophic_levels %>% filter(Year %in% c(1995, 2000, 2010)) %>% mutate(Year= factor(Year, levels = (c("1995", "2000",  "2010")))), 
-       aes(x=TL_taxon_year, y=eFCR, colour=NA))+
-  geom_mark_ellipse(aes(fill=Year, con.colour = NA))+
-  geom_jitter(colour="black")+
-  scale_x_continuous(limits = c(1.9,3.7))+
+TL_FCR_plot <- ggplot(trophic_levels %>% filter(Year %in% c(1995, 2000, 2010)) %>% mutate(Year= factor(Year, levels = (c("1995", "2000",  "2010")))), 
+       aes(x=TL_taxon_year, y=eFCR, colour=Year))+
+  geom_point()+
+  geom_mark_ellipse(aes(fill=Year), colour=NA)+
+  scale_x_continuous(limits = c(1.9,3.8))+
   scale_y_continuous(limits = c(1.2, 2.6))+
   theme_pubr()+
-  theme(legend.position = "right",
+  geom_text(data = trophic_levels %>%
+                    filter(Year %in% c(1995, 2010) & Taxa %in% c("Tilapias", "Salmons")) %>% 
+                    mutate(Year= factor(Year, levels = (c("1995", "2010"))),
+                           Taxa=case_when(Taxa=="Tilapias" ~ "Tilapia",
+                                          Taxa=="Salmons" ~ "Salmon")),
+                  mapping = aes(label=Taxa), 
+                  colour="black", 
+                  size=2, 
+                  segment.size = 0.2, 
+                  nudge_x = c(0.1,-0.05, 0.05,-0.05),
+                  nudge_y = c(0.05,-0.05,0.05,-0.05),
+                  force = 0.7,
+                  point.padding = 0.5)+
+  geom_curve(x=c(2.38), xend = c(2.0864), y= c(2.0), yend=c(1.72), curvature = 0.09, arrow = arrow(type = "open", angle = 35, length = unit(0.1, "cm")), colour="grey50", size=0.4)+
+  geom_curve(x=c(3.48), xend = c(2.66), y= c(1.48), yend=c(1.29), curvature = -0.4, arrow = arrow(type = "open", angle = 35, length = unit(0.1, "cm")), colour="grey50", size=0.4)+
+  theme(legend.position = c(0.9,0.9),
         text = element_text(size=10),
         legend.box.spacing = unit(0.2, "cm"),
         legend.key.size = unit(0.3, "cm"), 
         legend.key = element_rect(colour = "white"),
         legend.title = element_blank())+
-  scale_fill_manual(values = lacroix_palette("Pure", n=4))+
-  scale_colour_manual(values = lacroix_palette("Pure", n=4))+
-  labs(y="Feed conversion ratio", x="Taxon trophic level")+
-  ggsave("Figure - FCR vs TL.tiff", device = "tiff", dpi=600, width = 11, height = 7, units = "cm")+
-  ggsave("Figure - FCR vs TL.pdf", device = "pdf", dpi=600, width = 11, height = 7, units = "cm")
+  scale_fill_manual(values = c((lacroix_palette("Lemon", n=10))[c(3,7,10)]))+
+  scale_colour_manual(values = c((lacroix_palette("Lemon", n=10))[c(3,7,10)]))+
+  labs(y="Feed conversion ratio", x="Taxon trophic level")
 
+  
+
+ggsave( "Figure - FCR vs TL.tiff", ggMarginal(TL_FCR_plot, groupColour = TRUE, groupFill = TRUE, xparams = list( size=2), yparams = list(size=2), device = "tiff", dpi=600, width = 11, height = 7, units = "cm")
+
+
+
+ggsave(density_marginal, "Figure - FCR vs TL.pdf", device = "pdf", dpi=600, width = 11, height = 7, units = "cm")
+
+
+
+ggplot(trophic_levels, aes(x=Year, y=TL_taxon_year, colour=Taxa))+geom_line()
 
 
 ```
 
 
-  
-  # %>% 
-  #   group_by(Taxa) %>%
-  #   nest() %>% 
-  #   mutate(FF_model = map(data, ~(gam(FMFO~s(Year), data = .))),
-  #          Feeds_total = map(data, ~(gam(Feeds_used~s(Year), data = .))))
-  # )
+
 
 
 #Combine forage fish inclusion and model increase in animal byproduct through time with the decrease in forage fish
