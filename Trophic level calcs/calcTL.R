@@ -5,8 +5,8 @@ library(ggplot2)
 source('weighted_mean.R') # Calculates a weighted mean with NA in weights
 # Get the catches of forage fish 
 
-df.old <- read.csv('marinecatches.csv')
-df <- df[df$size == 'Small',]
+# df.old <- read.csv('marinecatches.csv')
+# df <- df[df$size == 'Small',]
 
 df.new <- read.csv('fao_catches_2019.csv')
 df <- df.new[df.new$size == 'Small',]
@@ -60,5 +60,5 @@ df.tot %>%
   group_by(Year) %>% 
   summarise(TL = weighted_mean(TL,Catch, na.rm = TRUE)) %>% 
   ggplot(aes(x = Year, y = TL))+geom_line(color = alpha('Darkred', alpha = 0.8), size = 1.5)+theme_classic()+
-  coord_cartesian(ylim = c(2.5,3.5))
+  coord_cartesian(ylim = c(2.9,3.4))
 
