@@ -62,3 +62,12 @@ df.tot %>%
   ggplot(aes(x = Year, y = TL))+geom_line(color = alpha('Darkred', alpha = 0.8), size = 1.5)+theme_classic()+
   coord_cartesian(ylim = c(2.9,3.4))
 
+
+# 
+
+
+TL_new <- df.tot %>% 
+  group_by(Year) %>% 
+  summarise(TL = weighted_mean(TL,Catch, na.rm = TRUE))
+
+write.csv(file = 'Trophic_level_2020.csv', TL_new, row.names = FALSE)
