@@ -243,8 +243,6 @@ fed_aqua_prod %>%
 # Figure - Aquaculture production change 
 
 ```{r}
-
-
 #Plot to show fed aquaculture's increasing contribution to seafood production  
 
 (seafood_compostion <- 
@@ -276,6 +274,7 @@ fed_prod_total <-
   fed_aqua_prod %>% 
   group_by(Year) %>% 
   summarise(Value_total=sum(Value))
+
   
 unique(fed_prod$Taxa_adj)
 
@@ -329,6 +328,7 @@ ggarrange(total_aqua_prod, fed_prod,
 
 ```{r}
 
+
 fed_aqua_prod_2 <- 
   fed_aqua_prod %>% 
   rename(Taxa=Taxa_adj) %>% 
@@ -368,7 +368,8 @@ ggplot(EU, aes(x=Year, y=Prop, colour=Taxa)) +
 #Nis dat for trophic level of forage fish
 
 
-forage_TL <- fread("forage.fish_TL.csv", header=TRUE)  
+#forage_TL <- fread("forage.fish_TL.csv", header=TRUE) 
+forage_TL <- read_csv("Trophic_level_2020.csv") %>% rename(FMFO_TL=TL)
 forage_inclusion <- fread("forage_fish_diets.csv", header=TRUE)
 
 
@@ -534,7 +535,7 @@ MTL_sensitivity <-
     legend.key.size = unit(0.3, "cm"),
     legend.box.spacing = unit(-0.4, "cm")
     )+
-  scale_color_manual(values = c(rev(lacroix_palette("Lemon", n=10))[c(1,3,5,10)]), name = bquote(Allow~Delta~to))+
+  scale_color_manual(values = c(rev(lacroix_palette("Lemon", n=10))[c(1,3,5,10)]), name = bquote(Allow~change~to))+
   labs(y="Mean trophic level")+
   ggsave("MTL_global_fed_aquaculture.tiff", device = "tiff", dpi=600, width = 9, height = 6, units="cm")+
   ggsave("MTL_global_fed_aquaculture.pdf", device = "pdf", dpi=600, width = 9, height = 6, units="cm")
@@ -543,14 +544,9 @@ MTL_sensitivity <-
 
 
 
-(salmon_diet <- data_frame(Year=rep(c("1990", "2000", "2016"), each=6, times=1),
+salmon_diet <- data_frame(Year=rep(c("1990", "2000", "2016"), each=6, times=1),
                           Ingredient = rep(c("Marine protein", "Marine oils", "Plant protein", "Plant oil", "Carbohydrates", "Microingredients"),times=3),
-                          Inclusion = c(65.4, 24, 0, 0, 9.5, 1, 33.5, 31.1, 22.2, 0, 11.2, 2.0, 14.5, 10.4, 40.3, 20.2, 10.6, 4)) %>% 
-  mutate(Group = case_when(Ingredient %in% c("Marine protein", "Marine oils") ~ "Fish",
-                           Ingredient  == "Microingredients" ~ "Microingred.",
-                           TRUE ~ "Plants"),
-         Group = factor(Group, levels = c("Microingred.", "Plants", "Fish")))
-  )                            
+                          Inclusion = c(65.4, 24, 0, 0, 9.5, 1, 33.5, 31.1, 22.2, 0, 11.2, 2.0, 14.5, 10.4, 40.3, 20.2, 10.6, 4))
 
 anchovy <- readPNG("Anchovy-engraulis_anchoita_el.png")
 anchovy <- grid::rasterGrob(anchovy)
@@ -561,7 +557,7 @@ soy <- grid::rasterGrob(soy)
 micro <- readPNG("black-pepper.png")
 micro <- grid::rasterGrob(micro)
 
-salmon_diet_plot <- ggplot(salmon_diet, aes(x=Year, y = Inclusion, fill = Group))+
+salmon_diet_plot <- ggplot(salmon_diet %>% mutate(Ingredient = factor(Ingredient, levels = rev(c("Marine protein", "Marine oils", "Plant protein", "Plant oil", "Carbohydrates", "Microingredients")))), aes(x=Year, y = Inclusion, fill = Ingredient))+
   geom_bar(stat="identity", width = 0.5)+
   theme_pubr()+
   theme(
@@ -570,18 +566,19 @@ salmon_diet_plot <- ggplot(salmon_diet, aes(x=Year, y = Inclusion, fill = Group)
     legend.key = element_blank(),
     legend.box.spacing = unit(-0.3, "cm"),
     legend.title = element_blank(),
-    legend.text = element_text(size=8)
+    legend.text = element_text(size=8),
+    legend.key.size = unit(0.3, "cm")
     
   )+ 
-  guides(fill=FALSE)+
-  scale_fill_manual(values = lacroix_palette("PeachPear", n=3))+
+  #guides(fill=FALSE)+
+  scale_fill_manual(values = rev(c("dodgerblue4", "dodgerblue2", "seagreen4", "seagreen3", "seagreen2", "goldenrod")))+
   scale_y_continuous(expand = c(0,0), limits = c(0, 100))+
-  annotation_custom(anchovy, xmin = c(0.7), xmax = c(1.3), ymin = c(44), ymax=c(50))+
-  annotation_custom(anchovy,  xmin = c(1.8), xmax = c(2.2), ymin = c(26), ymax=c(31))+
-  annotation_custom(anchovy, xmin = c(2.85), xmax = c(3.15), ymin = c(12), ymax=c(16))+
+  annotation_custom(anchovy, xmin = c(0.7), xmax = c(1.3), ymin = c(62), ymax=c(68))+
+  annotation_custom(anchovy,  xmin = c(1.8), xmax = c(2.2), ymin = c(31), ymax=c(37))+
+  annotation_custom(anchovy, xmin = c(2.85), xmax = c(3.15), ymin = c(12), ymax=c(17))+
   annotation_custom(soy,  xmin = c(0.85), xmax = c(1.15), ymin = c(91), ymax=c(98))+
-  annotation_custom(soy,  xmin = c(1.85), xmax = c(2.15), ymin = c(67), ymax=c(93))+
-  annotation_custom(soy, xmin = c(2.8), xmax = c(3.2), ymin = c(30), ymax=c(90))+
+  annotation_custom(soy,  xmin = c(1.85), xmax = c(2.15), ymin = c(70), ymax=c(97))+
+  annotation_custom(soy, xmin = c(2.8), xmax = c(3.2), ymin = c(30), ymax=c(97))+
   annotation_custom(micro,  xmin = c(1.85), xmax = c(2.15), ymin = c(98), ymax=c(99.6))+
   annotation_custom(micro, xmin = c(2.8), xmax = c(3.2), ymin = c(96.5), ymax=c(99.6))+
   annotate("segment", 
@@ -598,13 +595,15 @@ salmon_diet_plot <- ggplot(salmon_diet, aes(x=Year, y = Inclusion, fill = Group)
 
 
 
-ggarrange(salmon_diet_plot, MTL_sensitivity, 
+  ggarrange(salmon_diet_plot, MTL_sensitivity, 
           nrow = 1,
           ncol = 2,
-          labels = c("a", "b"), 
+          labels = c("a", "b"),
+          align = "hv",
           font.label = list(size=10))+
   ggsave("Figure - diet and MTL sensitivity.tiff", device ="tiff", dpi=600, width = 18, height= 6, units = "cm")+
-  ggsave("Figure - diet and MTL sensitivity.pdf", device ="pdf", dpi=600, width = 18, height= 6, units = "cm")
+  ggsave("Figure - diet and MTL sensitivity.pdf", device ="pdf", dpi=600, width = 18, height= 6, units = "cm")+
+    ggsave("Figure - diet and MTL sensitivity.jpg", device ="jpg", dpi=600, width = 18, height= 6, units = "cm")
 
 ``` 
 
@@ -732,21 +731,24 @@ TL_taxa <- fread("forage_fish_diets.csv", header=TRUE) %>%
 TL_taxa %>%
   left_join(Fishbase_TLs, by="Taxa") %>%
   select(Taxa, Year, TL_taxon_year, Fishbase) %>% 
-  rename(Farmed = TL_taxon_year,
-         Wild = Fishbase) %>% 
+  rename(Farmed.est = TL_taxon_year,
+         Fishbase = Fishbase) %>% 
   gather(key = "Production_type", value = "MTL", -c(Taxa, Year)) %>%
   ggplot(aes(x=Year, y=MTL, colour=Production_type, linetype=Production_type))+geom_line()+#geom_point(size=0.6)+
-  facet_wrap(~Taxa, nrow = 2) +
-  theme_bw()+
+  facet_wrap(~Taxa, nrow = 2, scales = "free") +
+  theme_pubr()+
   theme(text = element_text(size=10),
         panel.grid = element_blank(),
         axis.text.x = element_text(size = 7, hjust=0.8, angle = 45),
-        legend.position = c(0.9, 0.2),
+        legend.position = c(0.92, 0.2),
         legend.direction = "vertical",
-        legend.title = element_blank())+
-  scale_color_manual(values = c("grey20", "dodgerblue3"))+
+        legend.title = element_blank(),
+        strip.background = element_rect(fill = "transparent", colour = "transparent"))+
+  scale_color_manual(values = c("black", "firebrick"))+
+  scale_linetype_manual(values=c(1,2))+
   labs(y="Mean trophic level")+
-  ggsave("Fishbase_v_calculated.tiff", device = "tiff", dpi = 300, width=18, height = 12, units = "cm")
+  ggsave("Fishbase_v_calculated.tiff", device = "tiff", dpi = 300, width=18, height = 12, units = "cm")+
+   ggsave("Fishbase_v_calculated.jpg", device = "jpg", dpi = 300, width=18, height = 12, units = "cm")
 
 
 
@@ -833,6 +835,7 @@ ggplot(trophic_levels, aes(x=Year, y=TL_taxon_year, colour=Taxa))+geom_line()
 
 
 #Combine forage fish inclusion and model increase in animal byproduct through time with the decrease in forage fish
+
 
 year_range <- data_frame(Year=seq(1995,2015))
 FF_models <- (delta_forage_fish$FF_model)
