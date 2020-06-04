@@ -26,7 +26,18 @@ library(tidyverse)
 library(RColorBrewer)
 library(LaCroixColoR)
 library(countrycode)
+library(here)
+library(sp)
+library(rgdal)
+library(ggmap)
 ```
+#directories
+```{r}
+
+covid_folder <- file.path("", "home","cottrell", "Github", "covid19")
+
+```
+
 
 #FED SPP LIST
 ```{r} 
@@ -813,27 +824,74 @@ TL_FCR_plot <- ggplot(trophic_levels %>% filter(Year %in% c(1995, 2000, 2010)) %
         legend.title = element_blank())+
   scale_fill_manual(values = c((lacroix_palette("Lemon", n=10))[c(3,7,10)]))+
   scale_colour_manual(values = c((lacroix_palette("Lemon", n=10))[c(3,7,10)]))+
-  labs(y="Feed conversion ratio", x="Taxon trophic level")
+  labs(y="Feed conversion ratio", x="Taxon trophic level")+
 
   
 
-ggsave( "Figure - FCR vs TL.tiff", ggMarginal(TL_FCR_plot, groupColour = TRUE, groupFill = TRUE, xparams = list( size=2), yparams = list(size=2), device = "tiff", dpi=600, width = 11, height = 7, units = "cm")
-
-
-
-ggsave(density_marginal, "Figure - FCR vs TL.pdf", device = "pdf", dpi=600, width = 11, height = 7, units = "cm")
-
-
-
-ggplot(trophic_levels, aes(x=Year, y=TL_taxon_year, colour=Taxa))+geom_line()
+# ggsave( "Figure - FCR vs TL.tiff", ggMarginal(TL_FCR_plot, groupColour = TRUE, groupFill = TRUE, xparams = list( size=2), yparams = list(size=2), device = "tiff", dpi=600, width = 11, height = 7, units = "cm")
+# 
+# 
+# 
+# ggsave(density_marginal, "Figure - FCR vs TL.pdf", device = "pdf", dpi=600, width = 11, height = 7, units = "cm")
+# 
+# 
+# 
+# ggplot(trophic_levels, aes(x=Year, y=TL_taxon_year, colour=Taxa))+geom_line()
 
 
 ```
 
 
+#Figure - map of change in seafood demand
+
+```{r}
+
+food_bal <- vroom::vroom(file = file.path("", "home", "shares","clean-seafood", "data", "bottlenecks_data", "FAO", "food_balances", "food_balance_tidy.csv"), delim = ",")
+
+(food_supp <- food_bal %>% 
+  filter(element=="Food supply quantity (kg/capita/yr)" & item== "Fish, Seafood" & year %in% c(1993, 2013) & area!="China") %>% 
+  mutate(iso_a3 = countrycode(area, origin="country.name", destination = "iso3c", warn=TRUE)) %>% 
+  drop_na(iso_a3) %>% 
+  group_by(iso_a3, area) %>% 
+  summarise(delta_fish_supply = diff(quantity)) %>% 
+  drop_na(delta_fish_supply)
+)
 
 
+#bounding box
+bbox <- readOGR(dsn=file.path(here("Shapefiles", "ne_110m_graticules_all")), layer="ne_110m_wgs84_bounding_box")
 
+bbox <- spTransform(bbox, CRS("+proj=moll"))  # reproject bounding box
+bbox_df<- fortify(bbox) #, group="ISO_TER1"
+
+
+#countries
+countries <- readOGR(dsn = file.path(here("Shapefiles", "ne_110m_admin_0_countries")), layer="ne_110m_admin_0_countries")
+#countries <- countries[!countries$iso_a3 %in% c("ATA"),] #remove antartica
+countries<- spTransform(countries, CRS("+proj=moll"))
+countries@data$id <- rownames(countries@data)
+countries@data <- left_join(countries@data, food_supp, by="iso_a3")
+countries_df<-fortify(countries)
+countries_df<-left_join(countries_df, countries@data, by="id")
+
+
+(map <- ggplot(data=bbox_df, aes(long,lat, group=group)) + geom_polygon(fill="aliceblue")+
+  geom_polygon(data=countries_df, aes(x=long, y=lat, group=group,  fill=(delta_fish_supply)))+
+  theme_nothing()+
+  theme(legend.position = "bottom",
+        legend.text = element_text(size=8),
+        legend.title = element_text(size=8),
+        legend.box.spacing = unit(-1, "cm"))+
+  #scale_fill_viridis_c(direction=-1, option="C", na.value = "grey90",labels=c(2.5, 5, 7.5, 10), breaks=c(2.5e+08, 5e+08, 7.5e+08, 10e+08))+
+    scale_fill_gradient2(low = "yellow", mid = "violetred3", high = "orchid4", midpoint = 10, na.value = "grey90")+
+  guides(fill=guide_colorbar(title.position = "top", title.hjust = 0.5, barwidth = 15, barheight = 0.5, units="cm"))+
+  labs(fill=bquote(Change~"in"~fish~supply~1993-2013~(kg~capita^-1~year^-1))) +
+  ggsave(here(paste0("seafood supply map_", Sys.Date(), ".jpg")), device="jpg", dpi=300, width=12, height=7, units="cm"))
+
+```
+
+
+```{r}
 #Combine forage fish inclusion and model increase in animal byproduct through time with the decrease in forage fish
 
 
