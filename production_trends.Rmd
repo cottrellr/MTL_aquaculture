@@ -30,6 +30,7 @@ library(here)
 library(sp)
 library(rgdal)
 library(ggmap)
+library(janitor)
 ```
 #directories
 ```{r}
@@ -43,20 +44,10 @@ covid_folder <- file.path("", "home","cottrell", "Github", "covid19")
 ```{r} 
 
 fed_spp <- 
-  fread("fed_spp.csv", header=T)%>%
+  read_csv(here("data", "fed_spp.csv")) %>%
   rename(Species="Name_en") %>% 
   group_by(Species) %>%
   mutate(id = row_number()) 
-
-
-
-positions <- c(4:18)
-
-all_spp <- 
-  fread("all_spp.csv", header=T) %>% 
-  rename(Species = "Name_en")%>% 
-  filter(!(Species %in% fed_spp$Species))
-
 
   
 
@@ -73,11 +64,8 @@ all_spp <-
 ## F = FAO estimate from available sources of information
 
 
-
-
-
 (fed_aqua_prod <- 
-  fread("aqua-prod-raw.csv", header=T) %>% 
+  read_csv(here("data", "aqua-prod-raw.csv")) %>% 
   rename(Country="Country (Country)",
          Species="Species (ASFIS species)" ,
          Area="Aquaculture area (FAO major fishing area)",
@@ -380,8 +368,8 @@ ggplot(EU, aes(x=Year, y=Prop, colour=Taxa)) +
 
 
 #forage_TL <- fread("forage.fish_TL.csv", header=TRUE) 
-forage_TL <- read_csv("Trophic_level_2020.csv") %>% rename(FMFO_TL=TL)
-forage_inclusion <- fread("forage_fish_diets.csv", header=TRUE)
+forage_TL <- read_csv(here("data", "Trophic_level_2020.csv")) %>% rename(FMFO_TL=TL)
+forage_inclusion <- fread(here("data", "forage_fish_diets.csv"), header=TRUE)
 
 
 #Start bringing diet data together
@@ -395,7 +383,7 @@ exp_function <- function(x){
 }
 
 (animal_parts <- 
-    fread("diets_pahlow.csv", header = TRUE) %>% 
+    fread(here("data", "diets_pahlow.csv"), header = TRUE) %>% 
     group_by(Taxa) %>% 
     summarise(Rendered_animal_prop = mean(Prop)) %>% 
     mutate(Year=2015))
@@ -415,26 +403,26 @@ exp_function <- function(x){
 #MODEL the change in forage fish over all years
 
 total_prod_year <- 
-  fread("forage_fish_diets.csv", header=TRUE) %>% 
+  read_csv(here("data", "forage_fish_diets.csv")) %>% 
   mutate(Prod=Prod*1000) %>% 
   group_by(Year) %>% 
   summarise(Total_prod = sum(Prod))
 
 total_prod_year_2 <- 
-  fread("forage_fish_diets_2.csv", header=TRUE) %>% 
+  read_csv(here("data", "forage_fish_diets_2.csv")) %>% 
   mutate(Prod=Prod*1000) %>% 
   group_by(Year) %>% 
   summarise(Total_prod = sum(Prod))
 
 total_prod_year_3 <- 
-  fread("forage_fish_diets_3.csv", header=TRUE) %>% 
+  read_csv(here("data", "forage_fish_diets_3.csv")) %>% 
   mutate(Prod=Prod*1000) %>% 
   group_by(Year) %>% 
   summarise(Total_prod = sum(Prod))
 
 
 total_prod_year_4 <- 
-  fread("forage_fish_diets_4.csv", header=TRUE) %>% 
+  read_csv(here("data", "forage_fish_diets_4.csv")) %>% 
   mutate(Prod=Prod*1000) %>% 
   group_by(Year) %>% 
   summarise(Total_prod = sum(Prod))
@@ -444,7 +432,7 @@ total_prod_year_4 <-
 
 aqua_trophic_levels <- 
   bind_rows(
-  (TL_delta_global_full <- fread("forage_fish_diets.csv", header=TRUE) %>% 
+  (TL_delta_global_full <- fread(here("data", "forage_fish_diets.csv"), header=TRUE) %>% 
      filter(Year!=2020) %>% 
      left_join(by_products, by=c("Taxa", "Year")) %>%
      mutate(FMFO_inclusion=Total/100,
@@ -464,7 +452,7 @@ aqua_trophic_levels <-
      mutate(Sensitivity = "All variables")
   ),
   
-  (TL_delta_global_FFTL_delta <- fread("forage_fish_diets_2.csv", header=TRUE) %>% 
+  (TL_delta_global_FFTL_delta <- fread(here("data","forage_fish_diets_2.csv"), header=TRUE) %>% 
       filter(Year!=2020) %>% 
       left_join(by_products, by=c("Taxa", "Year")) %>%
       mutate(FMFO_inclusion=Total/100,
@@ -484,7 +472,7 @@ aqua_trophic_levels <-
       mutate(Sensitivity = "FF TL")
   ),
   
-  (TL_delta_global_Incl_delta <- fread("forage_fish_diets_3.csv", header=TRUE) %>% 
+  (TL_delta_global_Incl_delta <- fread(here("data","forage_fish_diets_3.csv"), header=TRUE) %>% 
       filter(Year!=2020) %>% 
       left_join(by_products, by=c("Taxa", "Year")) %>%
       mutate(FMFO_inclusion=Total/100,
@@ -504,7 +492,7 @@ aqua_trophic_levels <-
       mutate(Sensitivity = "FF inclusion")
   ),
   
-  (TL_delta_global_Incl_delta <- fread("forage_fish_diets_4.csv", header=TRUE) %>% 
+  (TL_delta_global_Incl_delta <- fread(here("data","forage_fish_diets_4.csv"), header=TRUE) %>% 
       filter(Year!=2020) %>% 
       left_join(by_products, by=c("Taxa", "Year")) %>%
       mutate(FMFO_inclusion=Total/100,
@@ -584,20 +572,20 @@ salmon_diet_plot <- ggplot(salmon_diet %>% mutate(Ingredient = factor(Ingredient
   #guides(fill=FALSE)+
   scale_fill_manual(values = rev(c("dodgerblue4", "dodgerblue2", "seagreen4", "seagreen3", "seagreen2", "goldenrod")))+
   scale_y_continuous(expand = c(0,0), limits = c(0, 100))+
-  annotation_custom(anchovy, xmin = c(0.7), xmax = c(1.3), ymin = c(62), ymax=c(68))+
-  annotation_custom(anchovy,  xmin = c(1.8), xmax = c(2.2), ymin = c(31), ymax=c(37))+
-  annotation_custom(anchovy, xmin = c(2.85), xmax = c(3.15), ymin = c(12), ymax=c(17))+
-  annotation_custom(soy,  xmin = c(0.85), xmax = c(1.15), ymin = c(91), ymax=c(98))+
-  annotation_custom(soy,  xmin = c(1.85), xmax = c(2.15), ymin = c(70), ymax=c(97))+
-  annotation_custom(soy, xmin = c(2.8), xmax = c(3.2), ymin = c(30), ymax=c(97))+
-  annotation_custom(micro,  xmin = c(1.85), xmax = c(2.15), ymin = c(98), ymax=c(99.6))+
-  annotation_custom(micro, xmin = c(2.8), xmax = c(3.2), ymin = c(96.5), ymax=c(99.6))+
-  annotate("segment", 
-           x = c(1.25, 1.25, 1.25, 2.25, 2.25, 2.25), 
-           xend = c( 1.75, 1.75, 1.75, 2.75, 2.75, 2.75), 
-           y = c(89.4, 98.9, 100, 64.6, 98, 100), 
-           yend = c(64.6, 98, 100, 24.9, 96, 100), 
-           linetype = 1, size=0.1, colour="grey50")+
+  # annotation_custom(anchovy, xmin = c(0.7), xmax = c(1.3), ymin = c(62), ymax=c(68))+
+  # annotation_custom(anchovy,  xmin = c(1.8), xmax = c(2.2), ymin = c(31), ymax=c(37))+
+  # annotation_custom(anchovy, xmin = c(2.85), xmax = c(3.15), ymin = c(12), ymax=c(17))+
+  # annotation_custom(soy,  xmin = c(0.85), xmax = c(1.15), ymin = c(91), ymax=c(98))+
+  # annotation_custom(soy,  xmin = c(1.85), xmax = c(2.15), ymin = c(70), ymax=c(97))+
+  # annotation_custom(soy, xmin = c(2.8), xmax = c(3.2), ymin = c(30), ymax=c(97))+
+  # annotation_custom(micro,  xmin = c(1.85), xmax = c(2.15), ymin = c(98), ymax=c(99.6))+
+  # annotation_custom(micro, xmin = c(2.8), xmax = c(3.2), ymin = c(96.5), ymax=c(99.6))+
+  # annotate("segment", 
+  #          x = c(1.25, 1.25, 1.25, 2.25, 2.25, 2.25), 
+  #          xend = c( 1.75, 1.75, 1.75, 2.75, 2.75, 2.75), 
+  #          y = c(89.4, 98.9, 100, 64.6, 98, 100), 
+  #          yend = c(64.6, 98, 100, 24.9, 96, 100), 
+  #          linetype = 1, size=0.1, colour="grey50")+
   labs(y="Feed composition (%)")+
   ggsave("diet_comp_salmon.pdf", device = "pdf", dpi=600, width = 9, height = 6, units="cm")+
   ggsave("diet_comp_salmon.tiff", device = "tiff", dpi=600, width = 9, height = 6, units="cm")
@@ -637,51 +625,51 @@ carps <- rfishbase::common_to_sci("Grass carp", "Common carp")$Species
 
 (Fishbase_TLs <-
     bind_rows(
-
+      
       (Salmons <-  ecology(salmons$Species) %>%
          select(Species, DietTroph, FoodTroph) %>%
          filter(!(is.na(DietTroph) & is.na(FoodTroph))) %>%
          mutate(Taxa="Salmons")),
-
-
+      
+      
       (Trouts <- rfishbase::ecology(trouts$Species) %>%
          select(Species, DietTroph, FoodTroph) %>%
          filter(!(is.na(DietTroph) & is.na(FoodTroph))) %>%
          mutate(Taxa="Trouts")),
-
-
+      
+      
       (Carps <- rfishbase::ecology(carps) %>%
          select(Species, DietTroph, FoodTroph) %>%
          filter(!(is.na(DietTroph) & is.na(FoodTroph))) %>%
          mutate(Taxa="Carps")),
-
-
-
+      
+      
+      
       (Tilapias <- rfishbase::ecology(tilapias$Species) %>%
          select(Species,DietTroph, FoodTroph) %>%
          filter(!(is.na(DietTroph) & is.na(FoodTroph))) %>%
          mutate(Taxa="Tilapias")),
-
-
+      
+      
       (Catfishes <- rfishbase::ecology(catfishes$Species) %>%
          select(Species, DietTroph,  FoodTroph) %>%
          filter(!(is.na(DietTroph) & is.na(FoodTroph))) %>%
          mutate(Taxa="Catfishes")),
-
-
+      
+      
       (Milkfish <- rfishbase::ecology("Chanos chanos") %>%
          select(Species, DietTroph,  FoodTroph) %>%
          filter(!(is.na(DietTroph) & is.na(FoodTroph))) %>%
          mutate(Taxa="Milkfish")),
-
-
-
+      
+      
+      
       (Marine_fishes <- ecology(marine_fishes$Species) %>%
          select(Species, DietTroph, FoodTroph) %>%
          filter(!(is.na(DietTroph) & is.na(FoodTroph))) %>%
          mutate(Taxa="Marine fishes")),
-
-
+      
+      
       (FW_fishes <- rfishbase::ecology(fw_fishes$Species) %>%
          select(Species, DietTroph, FoodTroph) %>%
          filter(!(is.na(DietTroph) & is.na(FoodTroph))) %>%
@@ -693,22 +681,22 @@ carps <- rfishbase::common_to_sci("Grass carp", "Common carp")$Species
          mutate(DietTroph = c(3.84, 4.44),
                 Species=Spp) %>%
          select(Species, DietTroph, FoodTroph) %>%
-         mutate(DietTroph = as.character(DietTroph),
-                FoodTroph = as.character(FoodTroph)) %>%
+         # mutate(DietTroph = as.character(DietTroph),
+         #        FoodTroph = as.character(FoodTroph)) %>%
          mutate(Taxa = "FW fishes")),
-
+      
       (Eels <- rfishbase::ecology(eels$Species) %>%
          select(Species, DietTroph, FoodTroph) %>%
          mutate(Taxa="Eels")),
-
-
+      
+      
       (Shrimps <- rfishbase::ecology(shrimps$Species, server = "sealifebase") %>%
          select(Species, DietTroph, FoodTroph) %>%
          filter(!(is.na(DietTroph) & is.na(FoodTroph))) %>%
          mutate(Taxa = "Shrimps")),
-
-
-
+      
+      
+      
       (FW_crusts <- ecology(fw_crusts$Species, server = "sealifebase") %>%
          select(Species, DietTroph, FoodTroph) %>%
          filter(!(is.na(DietTroph) & is.na(FoodTroph))) %>%
@@ -721,7 +709,7 @@ carps <- rfishbase::common_to_sci("Grass carp", "Common carp")$Species
     summarise(Fishbase =mean(TL_final))
 )
 
-TL_taxa <- fread("forage_fish_diets.csv", header=TRUE) %>% 
+TL_taxa <- fread(here("data", "forage_fish_diets.csv"), header=TRUE) %>% 
      filter(Year!=2020) %>% 
      left_join(by_products, by=c("Taxa", "Year")) %>%
      mutate(FMFO_inclusion=Total/100,
@@ -742,8 +730,8 @@ TL_taxa <- fread("forage_fish_diets.csv", header=TRUE) %>%
 TL_taxa %>%
   left_join(Fishbase_TLs, by="Taxa") %>%
   select(Taxa, Year, TL_taxon_year, Fishbase) %>% 
-  rename(Farmed.est = TL_taxon_year,
-         Fishbase = Fishbase) %>% 
+  rename(Farmed = TL_taxon_year,
+         Wild = Fishbase) %>% 
   gather(key = "Production_type", value = "MTL", -c(Taxa, Year)) %>%
   ggplot(aes(x=Year, y=MTL, colour=Production_type, linetype=Production_type))+geom_line()+#geom_point(size=0.6)+
   facet_wrap(~Taxa, nrow = 2, scales = "free") +
@@ -762,19 +750,21 @@ TL_taxa %>%
    ggsave("Fishbase_v_calculated.jpg", device = "jpg", dpi = 300, width=18, height = 12, units = "cm")
 
 
+Fishbase_TLs[duplicated(Fishbase_TLs),]
 
 ```
-
-
+  
+  
+  
   
 #Figure - clustering of trophic level across taxa
 ```{r}
 
-FCRs <- fread("eFCRs.csv", header=TRUE)
+FCRs <- fread(here("data",  "eFCRs.csv"), header=TRUE)
 
 
 (trophic_levels <- 
-  fread("forage_fish_diets.csv", header=TRUE) %>% 
+  fread(here("data", "forage_fish_diets.csv"), header=TRUE) %>% 
   filter(Year!=2020) %>% 
   left_join(by_products, by=c("Taxa", "Year")) %>%
   mutate(FMFO_inclusion=Total/100,
@@ -794,28 +784,34 @@ FCRs <- fread("eFCRs.csv", header=TRUE)
 
 
 
-TL_FCR_plot <- ggplot(trophic_levels %>% filter(Year %in% c(1995, 2000, 2010)) %>% mutate(Year= factor(Year, levels = (c("1995", "2000",  "2010")))), 
+(TL_FCR_plot <- ggplot(trophic_levels %>% filter(Year %in% c(1995, 2005, 2015) & !Taxa %in%c("FW fishes", "Milkfish")) %>% mutate(Year= factor(Year, levels = (c("1995", "2005",  "2015")))), 
        aes(x=TL_taxon_year, y=eFCR, colour=Year))+
-  geom_point()+
+    geom_point(size=1.5)+
+  geom_line(data= trophic_levels %>% filter(Year %in% c(1995, 2005, 2015)) %>% mutate(Year = factor(Year, levels=c("1995", "2005", "2015"))) %>% filter(Taxa %in% c("Tilapias", "Carps", "Shrimps",  "Salmons", "Marine fishes" , "Eels", "Trouts", "FW crustaceans")) , aes(group=Taxa, x=TL_taxon_year, y=eFCR), colour="black", linetype=3)+
+  
   geom_mark_ellipse(aes(fill=Year), colour=NA)+
-  scale_x_continuous(limits = c(1.9,3.8))+
+  scale_x_continuous(limits = c(1.9,3.7))+
   scale_y_continuous(limits = c(1.2, 2.6))+
   theme_pubr()+
   geom_text(data = trophic_levels %>%
-                    filter(Year %in% c(1995, 2010) & Taxa %in% c("Tilapias", "Salmons")) %>% 
-                    mutate(Year= factor(Year, levels = (c("1995", "2010"))),
+                    filter(Year %in% c(1995, 2015) & Taxa %in% c("Tilapias", "Carps", "Shrimps", "Salmons", "Marine fishes", "Eels", "Trouts", "FW crustaceans", "Catfishes")) %>% 
+                    mutate(Year= factor(Year, levels = (c("1995", "2015"))),
                            Taxa=case_when(Taxa=="Tilapias" ~ "Tilapia",
-                                          Taxa=="Salmons" ~ "Salmon")),
+                                          Taxa=="Salmons" ~ "Salmon",
+                                          TRUE ~ Taxa)),
                   mapping = aes(label=Taxa), 
                   colour="black", 
-                  size=2, 
+                  size=2.5, 
                   segment.size = 0.2, 
-                  nudge_x = c(0.1,-0.05, 0.05,-0.05),
-                  nudge_y = c(0.05,-0.05,0.05,-0.05),
+                  nudge_x = c(0,-0.06, 0, -0.06, 0, 0.05,0,0.05,0,-0.05, 0,-0.05,-0.06, -0.05 , 0,-0.05, 0,0.15),
+                  nudge_y = c(0.05,-0.05,0.05,-0.05, 0.05, -0.05,0.05,-0.05,0.05,-0.05,0.05,-0.05,0.05,-0.05, 0.05,-0.02, 0.05, -0.05),
                   force = 0.7,
                   point.padding = 0.5)+
-  geom_curve(x=c(2.38), xend = c(2.0864), y= c(2.0), yend=c(1.72), curvature = 0.09, arrow = arrow(type = "open", angle = 35, length = unit(0.1, "cm")), colour="grey50", size=0.4)+
-  geom_curve(x=c(3.48), xend = c(2.66), y= c(1.48), yend=c(1.29), curvature = -0.4, arrow = arrow(type = "open", angle = 35, length = unit(0.1, "cm")), colour="grey50", size=0.4)+
+    geom_segment(x= 2.132447, xend = 2.301294, y=2.0, yend=1.6, colour="black", linetype=3)+
+    geom_segment(x=2.301294, xend = 2.131350, y=1.6, yend=1.4, colour="black", linetype=3)+
+    
+  # geom_curve(x=c(2.38), xend = c(2.0864), y= c(2.0), yend=c(1.72), curvature = 0.09, arrow = arrow(type = "open", angle = 35, length = unit(0.1, "cm")), colour="grey50", size=0.4)+
+  # geom_curve(x=c(3.48), xend = c(2.66), y= c(1.48), yend=c(1.29), curvature = -0.4, arrow = arrow(type = "open", angle = 35, length = unit(0.1, "cm")), colour="grey50", size=0.4)+
   theme(legend.position = c(0.9,0.9),
         text = element_text(size=10),
         legend.box.spacing = unit(0.2, "cm"),
@@ -824,21 +820,15 @@ TL_FCR_plot <- ggplot(trophic_levels %>% filter(Year %in% c(1995, 2000, 2010)) %
         legend.title = element_blank())+
   scale_fill_manual(values = c((lacroix_palette("Lemon", n=10))[c(3,7,10)]))+
   scale_colour_manual(values = c((lacroix_palette("Lemon", n=10))[c(3,7,10)]))+
-  labs(y="Feed conversion ratio", x="Taxon trophic level")+
-
-  
-
-# ggsave( "Figure - FCR vs TL.tiff", ggMarginal(TL_FCR_plot, groupColour = TRUE, groupFill = TRUE, xparams = list( size=2), yparams = list(size=2), device = "tiff", dpi=600, width = 11, height = 7, units = "cm")
-# 
-# 
-# 
-# ggsave(density_marginal, "Figure - FCR vs TL.pdf", device = "pdf", dpi=600, width = 11, height = 7, units = "cm")
-# 
-# 
-# 
-# ggplot(trophic_levels, aes(x=Year, y=TL_taxon_year, colour=Taxa))+geom_line()
+  labs(y="Feed conversion ratio", x="Trophic level"))+
 
 
+
+    ggsave( "Figure - FCR vs TL.jpg", ggMarginal(TL_FCR_plot, groupColour = TRUE, groupFill = TRUE, xparams = list( size=1), yparams = list(size=1)), device = "jpg", dpi=600, width = 18, height = 13, units = "cm")
+
+
+
+unique(trophic_levels$Taxa)
 ```
 
 
