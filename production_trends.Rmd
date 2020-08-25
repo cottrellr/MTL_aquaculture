@@ -350,6 +350,10 @@ totals <- fed_aqua_prod_2 %>%
 EU <- fed_aqua_prod_2 %>% 
   group_by(Country, Taxa, Year) %>% 
   summarise(Value=sum(Value)) %>% 
+  ungroup() %>% 
+  mutate(Country = case_when(grepl("d'Ivoire", Country) ~ "Ivory Coast",
+                             grepl("union", Country) ~ "Reunion",
+                             TRUE ~ Country)) %>% 
   mutate(EU = countrycode(Country, origin = "country.name", destination = "eu28", warn=TRUE)) %>% 
   filter(!is.na(EU) | Country=="Norway") %>% 
   ungroup() %>% 
@@ -361,7 +365,11 @@ EU <- fed_aqua_prod_2 %>%
 
 ggplot(EU, aes(x=Year, y=Prop, colour=Taxa)) +
   geom_line()+
-  ggsave("Proportion of global from the EU incl Norway.tiff", device = "tiff", dpi=300, width = 15, height = 12, units = "cm")  #given EU regulations on by-products include Norway - no point using by products in Salmon as EU/Norway accounts for 60% of global production and a ban was in place
+scale_color_brewer(type="div", palette = "Spectral")+
+  labs(colour="", y="Proportion of global production")+
+  theme_pubr()+
+  ggsave(here("Proportion of global from the EU incl Norway.tiff"), device = "tiff", dpi=300, width = 15, height = 12, units = "cm") +
+  ggsave(here("Proportion of global from the EU incl Norway.jpg"), device = "jpg", dpi=300, width = 15, height = 12, units = "cm") #given EU regulations on by-products include Norway - no point using by products in Salmon as EU/Norway accounts for 60% of global production and a ban was in place
 
 
 #Nis dat for trophic level of forage fish
@@ -399,6 +407,30 @@ exp_function <- function(x){
     nest() %>% 
     mutate(Animal_inclusion = map(data,  exp_function)) %>% 
     unnest())
+
+#supplementary figure
+(by_products_plot <- ggplot(data = by_products %>% mutate(Animal_inclusion = case_when(Taxa=="Salmons" ~ 0, 
+                                                                                TRUE ~ Animal_inclusion)),
+                            aes(Year, y=Animal_inclusion, colour=Taxa))+
+  geom_line()+
+  scale_color_brewer(type="div", palette = "Spectral")+
+  labs(colour="", y="Proportional feed inclusion")+
+  theme_pubr()+
+  ggsave(here("By product inclusion.tiff"), device = "tiff", dpi=300, width = 15, height = 12, units = "cm") +
+  ggsave(here("By product inclusion.jpg"), device = "jpg", dpi=300, width = 15, height = 12, units = "cm"))
+
+
+#supplementary figure
+
+(forage_fish_TL <- ggplot(data = forage_TL, aes(x=Year, y=FMFO_TL))+
+  geom_line()+
+   scale_color_brewer(type="div", palette = "Spectral")+
+  labs(colour="", y="Mean trophic level")+
+  theme_pubr()+
+  ggsave(here("Forage TL.tiff"), device = "tiff", dpi=300, width = 15, height = 12, units = "cm") +
+  ggsave(here("Forage TL.jpg"), device = "jpg", dpi=300, width = 15, height = 12, units = "cm"))
+
+
 
 #MODEL the change in forage fish over all years
 
