@@ -71,3 +71,42 @@ TL_new <- df.tot %>%
   summarise(TL = weighted_mean(TL,Catch, na.rm = TRUE))
 
 write.csv(file = 'Trophic_level_2020.csv', TL_new, row.names = FALSE)
+
+
+# Plot the top 20 species (based on 2015 catch)
+
+
+idx20 <- df.tot[df.tot$Year == 2015,][order(df.tot[df.tot$Year == 2015,]$Catch,decreasing = TRUE),]$Species[1:20]
+idx50 <- df.tot[df.tot$Year == 2015,][order(df.tot[df.tot$Year == 2015,]$Catch,decreasing = TRUE),]$Species[1:50]
+idx100 <- df.tot[df.tot$Year == 2015,][order(df.tot[df.tot$Year == 2015,]$Catch,decreasing = TRUE),]$Species[1:100]
+  
+
+
+df.plot <- rbind(
+  df.tot %>% 
+  group_by(Year) %>% 
+  summarise(TL = weighted_mean(TL,Catch, na.rm = TRUE)) %>% 
+  mutate(p = 'all'),
+  df.tot[df.tot$Species %in% idx20,] %>% 
+    group_by(Year) %>% 
+    summarise(TL = weighted_mean(TL,Catch, na.rm = TRUE)) %>% 
+    mutate(p = 'Top 20'),
+  df.tot[df.tot$Species %in% idx50,] %>% 
+    group_by(Year) %>% 
+    summarise(TL = weighted_mean(TL,Catch, na.rm = TRUE)) %>% 
+    mutate(p = 'Top 50'),
+  df.tot[df.tot$Species %in% idx100,] %>% 
+    group_by(Year) %>% 
+    summarise(TL = weighted_mean(TL,Catch, na.rm = TRUE)) %>% 
+    mutate(p = 'Top 100')
+  
+)
+
+p1 <- ggplot(df.plot, aes(x=Year, y = TL, color = p))+geom_line()+theme_classic()+
+  theme(legend.title = element_blank())
+
+
+png('TL_per_group.png', height = 12, width = 16, res = 400, units = 'cm')  
+p1
+dev.off()
+
