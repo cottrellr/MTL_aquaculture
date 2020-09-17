@@ -31,6 +31,8 @@ library(sp)
 library(rgdal)
 library(ggmap)
 library(janitor)
+library(paletteer)
+library(colorBlindness)
 ```
 #directories
 ```{r}
@@ -346,6 +348,7 @@ totals <- fed_aqua_prod_2 %>%
   group_by(Taxa, Year) %>% 
   summarise(Value=sum(Value))
 
+palettes_d_names
 
 EU <- fed_aqua_prod_2 %>% 
   group_by(Country, Taxa, Year) %>% 
@@ -365,7 +368,7 @@ EU <- fed_aqua_prod_2 %>%
 
 ggplot(EU, aes(x=Year, y=Prop, colour=Taxa)) +
   geom_line()+
-scale_color_brewer(type="div", palette = "Spectral")+
+  scale_color_futurama()+
   labs(colour="", y="Proportion of global production")+
   theme_pubr()+
   ggsave(here("Proportion of global from the EU incl Norway.tiff"), device = "tiff", dpi=300, width = 15, height = 12, units = "cm") +
@@ -390,6 +393,13 @@ exp_function <- function(x){
   return(fitted)
 }
 
+linear_function <- function(x){
+  new_data <- data_frame(Year= seq(1995, 2015))
+  fit <- lm(x$Rendered_animal_prop~x$Year)
+  fitted <- predict(fit, newdata = new_data)
+  return(fitted)
+}
+
 (animal_parts <- 
     fread(here("data", "diets_pahlow.csv"), header = TRUE) %>% 
     group_by(Taxa) %>% 
@@ -405,7 +415,8 @@ exp_function <- function(x){
                                           TRUE ~ Rendered_animal_prop)) %>% 
   group_by(Taxa) %>% 
     nest() %>% 
-    mutate(Animal_inclusion = map(data,  exp_function)) %>% 
+    mutate(Animal_inclusion = map(data,  exp_function),
+           Animal_inclusion_2 = map(data, linear_function)) %>% 
     unnest())
 
 #supplementary figure
@@ -547,6 +558,79 @@ aqua_trophic_levels <-
   )
 
 
+#Repeat the all variables but with linear anima-byproduct inclusion
+
+bind_rows(
+  (exponential <- fread(here("data", "forage_fish_diets.csv"), header=TRUE) %>% 
+     filter(Year!=2020) %>% 
+     left_join(by_products, by=c("Taxa", "Year")) %>%
+     mutate(FMFO_inclusion=Total/100,
+            Animal_inclusion = case_when(Taxa == "Salmons" ~ 0,
+                                         TRUE ~ Animal_inclusion),
+            Feeds_used = Feeds_used*1000,
+            Prod = Prod*1000,
+            Crop_inclusion = 1-(Animal_inclusion+FMFO_inclusion)) %>% 
+     left_join(forage_TL, by="Year") %>% 
+     mutate(Animal_TL = 2.1,# runif(min =2.0, max =  2.1, n=165),
+            Crop_TL = 1, 
+            TL_taxon_year = (Animal_inclusion*Animal_TL)+ (FMFO_inclusion*FMFO_TL) + (Crop_inclusion*Crop_TL)+1) %>% 
+     left_join(total_prod_year, by="Year") %>% 
+     mutate(MTL = TL_taxon_year*Prod/Total_prod) %>% 
+     group_by(Year) %>% 
+     summarise(MTL=sum(MTL)) %>% 
+     mutate(Sensitivity = "Exponential")
+  ),
+  
+  (linear <- fread(here("data", "forage_fish_diets.csv"), header=TRUE) %>% 
+    filter(Year!=2020) %>% 
+    left_join(by_products, by=c("Taxa", "Year")) %>%
+    mutate(FMFO_inclusion=Total/100,
+           Animal_inclusion_2 = case_when(Taxa == "Salmons" ~ 0,
+                                          TRUE ~ Animal_inclusion_2),
+           Feeds_used = Feeds_used*1000,
+           Prod = Prod*1000,
+           Crop_inclusion = 1-(Animal_inclusion_2+FMFO_inclusion)) %>% 
+    left_join(forage_TL, by="Year") %>% 
+    mutate(Animal_TL = 2.1,# runif(min =2.0, max =  2.1, n=165),
+           Crop_TL = 1, 
+           TL_taxon_year = (Animal_inclusion_2*Animal_TL)+ (FMFO_inclusion*FMFO_TL) + (Crop_inclusion*Crop_TL)+1) %>% 
+    left_join(total_prod_year, by="Year") %>% 
+    mutate(MTL = TL_taxon_year*Prod/Total_prod) %>% 
+    group_by(Year) %>% 
+    summarise(MTL=sum(MTL)) %>% 
+    mutate(Sensitivity = "Linear")
+   ),
+  
+   
+   (sal_byp <- fread(here("data", "forage_fish_diets.csv"), header=TRUE) %>% 
+     filter(Year!=2020) %>% 
+    left_join(by_products, by=c("Taxa", "Year")) %>%
+    mutate(FMFO_inclusion=Total/100,
+           # Animal_inclusion_2 = case_when(Taxa == "Salmons" ~ 0,
+           #                                TRUE ~ Animal_inclusion_2),
+           Feeds_used = Feeds_used*1000,
+           Prod = Prod*1000,
+           Crop_inclusion = 1-(Animal_inclusion+FMFO_inclusion)) %>% 
+    left_join(forage_TL, by="Year") %>% 
+    mutate(Animal_TL = 2.1,# runif(min =2.0, max =  2.1, n=165),
+           Crop_TL = 1, 
+           TL_taxon_year = (Animal_inclusion*Animal_TL)+ (FMFO_inclusion*FMFO_TL) + (Crop_inclusion*Crop_TL)+1) %>% 
+    left_join(total_prod_year, by="Year") %>% 
+    mutate(MTL = TL_taxon_year*Prod/Total_prod) %>% 
+    group_by(Year) %>% 
+    summarise(MTL=sum(MTL)) %>% 
+    mutate(Sensitivity = "Salmon w/ by-product")
+)
+) %>% 
+  ggplot(aes(x=Year, y=MTL, colour=Sensitivity))+geom_line()+
+  theme_pubr()+
+  theme(legend.title = element_blank())+
+  labs(y="Mean trophic Level", colour = "Animal by-product inclusion")+
+  scale_color_aaas()+
+  guides(colour = guide_legend(title.position = "top", title.hjust = .5))+
+  ggsave(here("Figure S2 - by product sensitivity.jpg"), device = "jpg", dpi=300, width=12, height = 10, units="cm")+
+  ggsave(here("Figure S2 - by product sensitivity.pdf"), device = "pdf", dpi=300, width=12, height = 10, units="cm")
+
 
 ```
 
@@ -575,7 +659,7 @@ MTL_sensitivity <-
 
 
 
-salmon_diet <- data_frame(Year=rep(c("1990", "2000", "2016"), each=6, times=1),
+salmon_diet  <- data_frame(Year=rep(c("1990", "2000", "2016"), each=6, times=1),
                           Ingredient = rep(c("Marine protein", "Marine oils", "Plant protein", "Plant oil", "Carbohydrates", "Microingredients"),times=3),
                           Inclusion = c(65.4, 24, 0, 0, 9.5, 1, 33.5, 31.1, 22.2, 0, 11.2, 2.0, 14.5, 10.4, 40.3, 20.2, 10.6, 4))
 
@@ -594,11 +678,15 @@ salmon_diet_plot <- ggplot(salmon_diet %>% mutate(Ingredient = factor(Ingredient
   theme(
     text = element_text(size=10),
     legend.position = "right", 
+    legend.background  = element_rect(fill="transparent"),
     legend.key = element_blank(),
     legend.box.spacing = unit(-0.3, "cm"),
     legend.title = element_blank(),
     legend.text = element_text(size=8),
-    legend.key.size = unit(0.3, "cm")
+    legend.key.size = unit(0.3, "cm"),
+    axis.title.x = element_blank(),
+    plot.background = element_rect(fill="transparent", colour="transparent"),
+    axis.text.x = element_text(hjust = 1, angle = 45)
     
   )+ 
   #guides(fill=FALSE)+
@@ -624,6 +712,18 @@ salmon_diet_plot <- ggplot(salmon_diet %>% mutate(Ingredient = factor(Ingredient
 
 
 
+MTL_sensitivity+annotation_custom(grob = ggplotGrob(salmon_diet_plot), 
+                                  xmin = 1994.5,
+                                  xmax = 2006,
+                                  ymin = 2.15,
+                                  ymax = 2.38)+
+   ggsave("Figure - diet and MTL sensitivity_2.tiff", device ="tiff", dpi=600, width = 15, height= 10, units = "cm")+
+  ggsave("Figure - diet and MTL sensitivity_2.pdf", device ="pdf", dpi=600, width = 15, height= 10, units = "cm")+
+    ggsave("Figure - diet and MTL sensitivity_2.jpg", device ="jpg", dpi=600, width = 15, height= 10, units = "cm")
+
+
+
+class(aqua_trophic_levels$Year)
 
 
   ggarrange(salmon_diet_plot, MTL_sensitivity, 
@@ -737,9 +837,191 @@ carps <- rfishbase::common_to_sci("Grass carp", "Common carp")$Species
     mutate(TL_final = case_when(!is.na(DietTroph)~ DietTroph,
                                 TRUE ~ FoodTroph),
            TL_final = as.numeric(TL_final)) %>%
-    group_by(Taxa) %>%
-    summarise(Fishbase =mean(TL_final))
+    distinct() #%>% 
+    #group_by(Taxa) %>%
+    # summarise(median = median(TL_final),
+    #           lower = quantile(TL_final,0.05),
+    #           upper = quantile(TL_final,0.95))
 )
+
+
+# boxplot inset plots
+
+(carp_wild <- ggplot(Fishbase_TLs %>% filter(Taxa =="Carps"))+
+  geom_boxplot(aes(y=TL_final, middle=median(TL_final), lower=quantile(TL_final,0.95), upper=quantile(TL_final,0.95)), fill="transparent", colour="firebrick")+
+  theme(panel.background = element_rect(fill="transparent", colour = "transparent"),
+        plot.background = element_rect(fill="transparent", colour="transparent"),
+        rect = element_rect(fill = "transparent", colour = "transparent"),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title = element_blank(),
+        axis.ticks =element_blank(),
+        element_blank(),
+        plot.margin = unit(c(0,0,0,0), "cm"))+
+scale_y_continuous(limits = c(2,3.1), expand = c(0,0))
+  
+)
+
+
+
+
+(catfish_wild <- ggplot(Fishbase_TLs %>% filter(Taxa =="Catfishes"))+
+  geom_boxplot(aes(y=TL_final, middle=median(TL_final), lower=quantile(TL_final,0.95), upper=quantile(TL_final,0.95)), fill="transparent", colour="firebrick")+
+   theme(panel.background = element_rect(fill="transparent", colour = "transparent"),
+        plot.background = element_rect(fill="transparent", colour="transparent"),
+        rect = element_rect(fill = "transparent", colour = "transparent"),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title = element_blank(),
+        axis.ticks =element_blank(),
+        element_blank(),
+        plot.margin = unit(c(0,0,0,0), "cm"))+
+scale_y_continuous(limits = c(2,4.5), expand = c(0,0))
+  
+)
+
+
+(eel_wild <- ggplot(Fishbase_TLs %>% filter(Taxa =="Eels"))+
+  geom_boxplot(aes(y=TL_final, middle=median(TL_final), lower=quantile(TL_final,0.95), upper=quantile(TL_final,0.95)), fill="transparent", colour="firebrick")+
+  theme(panel.background = element_rect(fill="transparent", colour = "transparent"),
+        plot.background = element_rect(fill="transparent", colour="transparent"),
+        rect = element_rect(fill = "transparent", colour = "transparent"),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title = element_blank(),
+        axis.ticks =element_blank(),
+        element_blank(),
+        plot.margin = unit(c(0,0,0,0), "cm"))+
+scale_y_continuous(limits = c(2,3.6), expand = c(0,0))
+  
+)
+
+(crust_wild <- ggplot(Fishbase_TLs %>% filter(Taxa =="FW crustaceans"))+
+  geom_boxplot(aes(y=TL_final, middle=median(TL_final), lower=quantile(TL_final,0.95), upper=quantile(TL_final,0.95)), fill="transparent", colour="firebrick")+
+     theme(panel.background = element_rect(fill="transparent", colour = "transparent"),
+        plot.background = element_rect(fill="transparent", colour="transparent"),
+        rect = element_rect(fill = "transparent", colour = "transparent"),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title = element_blank(),
+        axis.ticks =element_blank(),
+        element_blank(),
+        plot.margin = unit(c(0,0,0,0), "cm"))+
+scale_y_continuous(limits = c(2,3), expand = c(0,0))
+  
+)
+
+(FW_wild <- ggplot(Fishbase_TLs %>% filter(Taxa =="FW fishes"))+
+  geom_boxplot(aes(y=TL_final, middle=median(TL_final), lower=quantile(TL_final,0.95), upper=quantile(TL_final,0.95)), fill="transparent", colour="firebrick")+
+     theme(panel.background = element_rect(fill="transparent", colour = "transparent"),
+        plot.background = element_rect(fill="transparent", colour="transparent"),
+        rect = element_rect(fill = "transparent", colour = "transparent"),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title = element_blank(),
+        axis.ticks =element_blank(),
+        element_blank(),
+        plot.margin = unit(c(0,0,0,0), "cm"))+
+scale_y_continuous(limits = c(2,4.5), expand = c(0,0))
+  
+  
+)
+
+(marine_wild <- ggplot(Fishbase_TLs %>% filter(Taxa =="Marine fishes"))+
+  geom_boxplot(aes(y=TL_final, middle=median(TL_final), lower=quantile(TL_final,0.95), upper=quantile(TL_final,0.95)), fill="transparent", colour="firebrick")+
+theme(panel.background = element_rect(fill="transparent", colour = "transparent"),
+        plot.background = element_rect(fill="transparent", colour="transparent"),
+        rect = element_rect(fill = "transparent", colour = "transparent"),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title = element_blank(),
+        axis.ticks =element_blank(),
+        element_blank(),
+        plot.margin = unit(c(0,0,0,0), "cm"))+
+scale_y_continuous(limits = c(2,4.5), expand = c(0,0))
+  
+)
+
+(milk_wild <- ggplot(Fishbase_TLs %>% filter(Taxa =="Milkfish"))+
+  geom_boxplot(aes(y=TL_final, middle=median(TL_final), lower=quantile(TL_final,0.95), upper=quantile(TL_final,0.95)), fill="transparent", colour="firebrick")+
+  theme(panel.background = element_rect(fill="transparent", colour = "transparent"),
+        plot.background = element_rect(fill="transparent", colour="transparent"),
+        rect = element_rect(fill = "transparent", colour = "transparent"),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title = element_blank(),
+        axis.ticks =element_blank(),
+        element_blank(),
+        plot.margin = unit(c(0,0,0,0), "cm"))+
+scale_y_continuous(limits = c(2,2.5), expand = c(0,0))
+    
+  
+)
+
+(salm_wild <- ggplot(Fishbase_TLs %>% filter(Taxa =="Salmons"))+
+  geom_boxplot(aes(y=TL_final, middle=median(TL_final), lower=quantile(TL_final,0.95), upper=quantile(TL_final,0.95)), fill="transparent", colour="firebrick")+
+ theme(panel.background = element_rect(fill="transparent", colour = "transparent"),
+        plot.background = element_rect(fill="transparent", colour="transparent"),
+        rect = element_rect(fill = "transparent", colour = "transparent"),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title = element_blank(),
+        axis.ticks =element_blank(),
+        element_blank(),
+        plot.margin = unit(c(0,0,0,0), "cm"))+
+scale_y_continuous(limits = c(2,4.5), expand = c(0,0))
+  
+)
+
+
+(shrimp_wild <- ggplot(Fishbase_TLs %>% filter(Taxa =="Shrimps"))+
+  geom_boxplot(aes(y=TL_final, middle=median(TL_final), lower=quantile(TL_final,0.95), upper=quantile(TL_final,0.95)), fill="transparent", colour="firebrick")+
+  theme(panel.background = element_rect(fill="transparent", colour = "transparent"),
+        plot.background = element_rect(fill="transparent", colour="transparent"),
+        rect = element_rect(fill = "transparent", colour = "transparent"),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title = element_blank(),
+        axis.ticks =element_blank(),
+        element_blank(),
+        plot.margin = unit(c(0,0,0,0), "cm"))+
+scale_y_continuous(limits = c(2,3.5), expand = c(0,0))
+  
+)
+
+
+(tilapia_wild <- ggplot(Fishbase_TLs %>% filter(Taxa =="Tilapias"))+
+  geom_boxplot(aes(y=TL_final, middle=median(TL_final), lower=quantile(TL_final,0.95), upper=quantile(TL_final,0.95)), fill="transparent", colour="firebrick")+
+  theme(panel.background = element_rect(fill="transparent", colour = "transparent"),
+        plot.background = element_rect(fill="transparent", colour="transparent"),
+        rect = element_rect(fill = "transparent", colour = "transparent"),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title = element_blank(),
+        axis.ticks =element_blank(),
+        element_blank(),
+        plot.margin = unit(c(0,0,0,0), "cm"))+
+scale_y_continuous(limits = c(2,2.5), expand = c(0,0))
+  
+)
+
+(trout_wild <- ggplot(Fishbase_TLs %>% filter(Taxa =="Trouts"))+
+  geom_boxplot(aes(y=TL_final, middle=median(TL_final), lower=quantile(TL_final,0.95), upper=quantile(TL_final,0.95)), fill="transparent", colour="firebrick")+
+ theme(panel.background = element_rect(fill="transparent", colour = "transparent"),
+        plot.background = element_rect(fill="transparent", colour="transparent"),
+        rect = element_rect(fill = "transparent", colour = "transparent"),
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank(),
+        axis.title = element_blank(),
+        axis.ticks =element_blank(),
+        element_blank(),
+        plot.margin = unit(c(0,0,0,0), "cm"))+
+scale_y_continuous(limits = c(2,4.2), expand = c(0,0))
+  
+)
+
+
+
 
 TL_taxa <- fread(here("data", "forage_fish_diets.csv"), header=TRUE) %>% 
      filter(Year!=2020) %>% 
@@ -759,9 +1041,205 @@ TL_taxa <- fread(here("data", "forage_fish_diets.csv"), header=TRUE) %>%
 
 
 
+
+#main plots
+
+carp_plot <- ggplot(TL_taxa %>% filter(Taxa=="Carps"), aes(x=Year, y=TL_taxon_year))+geom_line()+
+  scale_y_continuous(limits=c(2,3.1))+
+  annotation_custom(grob=ggplotGrob(carp_wild),
+                    xmin = 2002,
+                    xmax = 2008,
+                    ymin = 2,
+                    ymax=3.1)+
+  theme_pubr()+
+  theme(axis.title = element_blank(),
+        axis.text.x = element_text(size=9, angle = 45, hjust=1),
+        plot.subtitle = element_text(size=9))+
+  labs(subtitle = "Carps")
+  
+
+
+catfish_plot <- ggplot(TL_taxa %>% filter(Taxa=="Catfishes"), aes(x=Year, y=TL_taxon_year))+geom_line()+
+  scale_y_continuous(limits=c(2,4.5))+
+  annotation_custom(grob=ggplotGrob(catfish_wild),
+                    xmin = 2002,
+                    xmax = 2008,
+                    ymin = 2,
+                    ymax=4.5)+
+ theme_pubr()+
+  theme(axis.title = element_blank(),
+        axis.text.x = element_text(size=9, angle = 45, hjust=1),
+        plot.subtitle = element_text(size=9))+
+  labs(subtitle = "Catfishes")
+  
+
+eel_plot <- ggplot(TL_taxa %>% filter(Taxa=="Eels"), aes(x=Year, y=TL_taxon_year))+geom_line()+
+  scale_y_continuous(limits=c(2,3.6))+
+  annotation_custom(grob=ggplotGrob(eel_wild),
+                    xmin = 2002,
+                    xmax = 2008,
+                    ymin = 2,
+                    ymax=3.6)+
+  theme_pubr()+
+  theme(axis.title = element_blank(),
+        axis.text.x = element_text(size=9, angle = 45, hjust=1),
+        plot.subtitle = element_text(size=9))+
+  labs(subtitle = "Eels")
+  
+
+
+crust_plot <- ggplot(TL_taxa %>% filter(Taxa=="FW crustaceans"), aes(x=Year, y=TL_taxon_year))+geom_line()+
+  scale_y_continuous(limits=c(2,3))+
+  annotation_custom(grob=ggplotGrob(crust_wild),
+                    xmin = 2002,
+                    xmax = 2008,
+                    ymin = 2,
+                    ymax=3)+
+ theme_pubr()+
+  theme(axis.title = element_blank(),
+        axis.text.x = element_text(size=9, angle = 45, hjust=1),
+        plot.subtitle = element_text(size=9))+
+  labs(subtitle = "FW crustaceans")
+  
+
+fw_plot <- ggplot(TL_taxa %>% filter(Taxa=="FW fishes"), aes(x=Year, y=TL_taxon_year))+geom_line()+
+  scale_y_continuous(limits=c(2,4.5))+
+  annotation_custom(grob=ggplotGrob(FW_wild),
+                    xmin = 2002,
+                    xmax = 2008,
+                    ymin = 2,
+                    ymax=4.5)+
+  theme_pubr()+
+  theme(axis.title = element_blank(),
+        axis.text.x = element_text(size=9, angle = 45, hjust=1),
+        plot.subtitle = element_text(size=9))+
+  labs(subtitle = "Other FW fishes")
+  
+
+
+marine_plot <- ggplot(TL_taxa %>% filter(Taxa=="Marine fishes"), aes(x=Year, y=TL_taxon_year))+geom_line()+
+  scale_y_continuous(limits=c(2,4.5))+
+  annotation_custom(grob=ggplotGrob(marine_wild),
+                    xmin = 2002,
+                    xmax = 2008,
+                    ymin = 2,
+                    ymax=4.5)+
+ theme_pubr()+
+  theme(axis.title = element_blank(),
+        axis.text.x = element_text(size=9, angle = 45, hjust=1),
+        plot.subtitle = element_text(size=9))+
+  labs(subtitle = "Marine fishes")
+  
+
+
+milk_plot <- ggplot(TL_taxa %>% filter(Taxa=="Milkfish"), aes(x=Year, y=TL_taxon_year))+geom_line()+
+  scale_y_continuous(limits=c(2,2.5))+
+  annotation_custom(grob=ggplotGrob(milk_wild),
+                    xmin = 2002,
+                    xmax = 2008,
+                    ymin = 2,
+                    ymax=2.5)+
+ theme_pubr()+
+  theme(axis.title = element_blank(),
+        axis.text.x = element_text(size=9, angle = 45, hjust=1),
+        plot.subtitle = element_text(size=9))+
+  labs(subtitle = "Milkfish")
+  
+
+
+salm_plot <- ggplot(TL_taxa %>% filter(Taxa=="Salmons"), aes(x=Year, y=TL_taxon_year))+geom_line()+
+  scale_y_continuous(limits=c(2,4.5))+
+  annotation_custom(grob=ggplotGrob(salm_wild),
+                    xmin = 2002,
+                    xmax = 2008,
+                    ymin = 2,
+                    ymax=4.5)+
+  theme_pubr()+
+  theme(axis.title = element_blank(),
+        axis.text.x = element_text(size=9, angle = 45, hjust=1),
+        plot.subtitle = element_text(size=9))+
+  labs(subtitle = "Salmons")
+  
+
+shrimp_plot <- ggplot(TL_taxa %>% filter(Taxa=="Shrimps"), aes(x=Year, y=TL_taxon_year))+geom_line()+
+  scale_y_continuous(limits=c(2,3.5))+
+  annotation_custom(grob=ggplotGrob(shrimp_wild),
+                    xmin = 2002,
+                    xmax = 2008,
+                    ymin = 2,
+                    ymax=3.5)+
+ theme_pubr()+
+  theme(axis.title = element_blank(),
+        axis.text.x = element_text(size=9, angle = 45, hjust=1),
+        plot.subtitle = element_text(size=9))+
+  labs(subtitle = "Shrimps")
+  
+
+
+tilapia_plot <- ggplot(TL_taxa %>% filter(Taxa=="Tilapias"), aes(x=Year, y=TL_taxon_year))+geom_line()+
+  scale_y_continuous(limits=c(2,2.5))+
+  annotation_custom(grob=ggplotGrob(tilapia_wild),
+                    xmin = 2002,
+                    xmax = 2008,
+                    ymin = 2,
+                    ymax=2.5)+
+ theme_pubr()+
+  theme(axis.title = element_blank(),
+        axis.text.x = element_text(size=9, angle = 45, hjust=1),
+        plot.subtitle = element_text(size=9))+
+  labs(subtitle = "Tilapias")
+  
+
+trout_plot <- ggplot(TL_taxa %>% filter(Taxa=="Trouts"), aes(x=Year, y=TL_taxon_year))+geom_line()+
+  scale_y_continuous(limits=c(2,4.2))+
+  annotation_custom(grob=ggplotGrob(trout_wild),
+                    xmin = 2002,
+                    xmax = 2008,
+                    ymin = 2,
+                    ymax=4.2)+
+  theme_pubr()+
+  theme(axis.title = element_blank(),
+        axis.text.x = element_text(size=9, angle = 45, hjust=1),
+        plot.subtitle = element_text(size=9))+
+  labs(subtitle = "Trouts")
+  
+
+(legend_plot <- ggplot()+theme(rect = element_blank())+
+    theme(axis.text = element_blank(),
+          axis.title = element_blank(),
+          axis.ticks = element_blank())+
+    scale_x_continuous(limits=c(0,1))+
+    scale_y_continuous(limits=c(0,1))+
+  annotate("segment", x=0.1, xend = 0.3, y=0.4, yend=0.4, color="firebrick")+
+    annotate("segment", x=0.1, xend = 0.3, y=0.75, yend=0.75, color="black")+
+    annotate("rect", xmin = 0.1, xmax = 0.3, ymin = 0.3, ymax=0.5, fill="transparent", colour="firebrick")+
+    annotate("text", y=0.75, x=0.4, label = "Farmed\neffective", size=2.8, hjust=0)+
+    annotate("text", y=0.4, x=0.4, label = "Wild", size=2.8, hjust=0)
+)
+
+
+
+annotate_figure(p = ggarrange(carp_plot, catfish_plot, eel_plot, crust_plot,
+          fw_plot, marine_plot, milk_plot, salm_plot,
+          shrimp_plot, tilapia_plot, trout_plot, legend_plot,
+          nrow=3,
+          ncol=4
+          ),
+          left = text_grob("Mean trophic level", size=11, rot = 90),
+          bottom = text_grob("Year", size=11))+
+  ggsave("Fishbase_v_calculated_2.tiff", device = "tiff", dpi = 300, width=15, height = 18, units = "cm")+
+   ggsave("Fishbase_v_calculated_2.jpg", device = "jpg", dpi = 300, width=15, height = 18, units = "cm")
+
+
+
+
+
 TL_taxa %>%
   left_join(Fishbase_TLs, by="Taxa") %>%
-  select(Taxa, Year, TL_taxon_year, Fishbase) %>% 
+  select(Taxa, Year, TL_taxon_year, TL_final) %>%
+  group_by()
+  
+  
   rename(Farmed = TL_taxon_year,
          Wild = Fishbase) %>% 
   gather(key = "Production_type", value = "MTL", -c(Taxa, Year)) %>%
@@ -782,7 +1260,7 @@ TL_taxa %>%
    ggsave("Fishbase_v_calculated.jpg", device = "jpg", dpi = 300, width=18, height = 12, units = "cm")
 
 
-Fishbase_TLs[duplicated(Fishbase_TLs),]
+mean(Fishbase_TLs %>% filter(Taxa=="Catfishes") %>% .$TL_final)
 
 ```
   
@@ -871,6 +1349,8 @@ unique(trophic_levels$Taxa)
 food_bal <- vroom::vroom(file = file.path("", "home", "shares","clean-seafood", "data", "bottlenecks_data", "FAO", "food_balances", "food_balance_tidy.csv"), delim = ",")
 
 (food_supp <- food_bal %>% 
+  mutate(area = case_when(grepl("d'Ivoire", area) ~ "Cote d'Ivoire",
+                          TRUE ~ area)) %>% 
   filter(element=="Food supply quantity (kg/capita/yr)" & item== "Fish, Seafood" & year %in% c(1993, 2013) & area!="China") %>% 
   mutate(iso_a3 = countrycode(area, origin="country.name", destination = "iso3c", warn=TRUE)) %>% 
   drop_na(iso_a3) %>% 
@@ -898,17 +1378,17 @@ countries_df<-left_join(countries_df, countries@data, by="id")
 
 
 (map <- ggplot(data=bbox_df, aes(long,lat, group=group)) + geom_polygon(fill="aliceblue")+
-  geom_polygon(data=countries_df, aes(x=long, y=lat, group=group,  fill=(delta_fish_supply)))+
+  geom_polygon(data=countries_df, aes(x=long, y=lat, group=group,  fill=(delta_fish_supply)), colour="grey40", size=0.3)+
   theme_nothing()+
   theme(legend.position = "bottom",
         legend.text = element_text(size=8),
         legend.title = element_text(size=8),
-        legend.box.spacing = unit(-1, "cm"))+
+        legend.box.spacing = unit(0, "cm"))+
   #scale_fill_viridis_c(direction=-1, option="C", na.value = "grey90",labels=c(2.5, 5, 7.5, 10), breaks=c(2.5e+08, 5e+08, 7.5e+08, 10e+08))+
     scale_fill_gradient2(low = "yellow", mid = "violetred3", high = "orchid4", midpoint = 10, na.value = "grey90")+
   guides(fill=guide_colorbar(title.position = "top", title.hjust = 0.5, barwidth = 15, barheight = 0.5, units="cm"))+
   labs(fill=bquote(Change~"in"~fish~supply~1993-2013~(kg~capita^-1~year^-1))) +
-  ggsave(here(paste0("seafood supply map_", Sys.Date(), ".jpg")), device="jpg", dpi=300, width=12, height=7, units="cm"))
+  ggsave(here(paste0("seafood supply map_", Sys.Date(), ".jpg")), device="jpg", dpi=300, width=12, height=8, units="cm"))
 
 ```
 
