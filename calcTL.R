@@ -56,10 +56,10 @@ for(i in 1:length(spp)){
 
 
 
-df.tot %>% 
+df.tot2 <- df.tot %>% 
   group_by(Year) %>% 
-  summarise(TL = weighted_mean(TL,Catch, na.rm = TRUE)) %>% 
+  summarise(TL = weighted_mean(TL,Catch, na.rm = TRUE))# %>% 
   ggplot(aes(x = Year, y = TL))+geom_line(color = alpha('Darkred', alpha = 0.8), size = 1.5)+theme_classic()
 
 
-write_csvdf.tot
+write_csv(df.tot2, "forage_fish_TL_update.csv")

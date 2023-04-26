@@ -9,7 +9,7 @@ output: html_document
 ```{r}
 library(devtools)
 #devtools::install_github("johannesbjork/LaCroixColoR")
-#remotes::install_github("ropensci/rfishbase")
+remotes::install_github("ropensci/rfishbase")
 library(taxize)
 library(png)
 library(rfishbase)
@@ -62,7 +62,25 @@ all_spp <-
 ## F = FAO estimate from available sources of information
 
 
-
+all_prod <- 
+  fread("aqua-prod-raw.csv", header=T) %>% 
+  rename(Country="Country (Country)",
+         Species="Species (ASFIS species)" ,
+         Area="Aquaculture area (FAO major fishing area)",
+         Environment="Environment (Environment)")%>% 
+  gather(Year, Value, -c(Country, Species, Area, Environment, Unit)) %>% 
+  mutate(Year = gsub("X", "", Year) %>% 
+           as.numeric) %>% 
+  mutate(Value = case_when(Value=="0 0" ~ "0.2",
+                           Value=="-" ~ "0",
+                           T ~ Value)) %>% 
+  filter(!(Value=="..." | Value=="" | Country=="Totals")) %>% 
+  mutate(Value = gsub(" F", "", Value) %>% 
+           as.numeric) %>%
+  select(-Unit) %>% 
+  group_by(Country, Species, Area, Year, Environment) %>%
+  mutate(id= row_number()) %>% 
+  filter(Year==2017)
 
 
 (fed_aqua_prod <- 
@@ -212,12 +230,12 @@ all_spp <-
         ungroup() %>% 
         mutate(Group = factor(Group, levels=c("Aquatic plants", "Molluscs", "Bacteria", "Amphibians & reptiles", "Other aquatic invertebrates","Unfed finfish","Fed Crustaceans" , "Fed Finfish"))) %>% 
         mutate(Group_2 = case_when(Group %in% c("Fed Crustaceans" , "Fed Finfish",  "Amphibians & reptiles") ~ "Fed aquaculture", 
-                                   Group %in% c("Other aquatic invertebrates","Unfed finfish","Bacteria","Aquatic plants", "Molluscs") ~ "Unfed aquaculture")) %>% 
-        group_by(Group_2, Year) %>% 
-        summarise(Value=sum(Value)),
-      fisheries)
+                                   Group %in% c("Other aquatic invertebrates","Unfed finfish","Bacteria","Aquatic plants", "Molluscs") ~ "Unfed aquaculture"))))# %>% 
+        # group_by(Group_2, Year) %>% 
+        # summarise(Value=sum(Value))))#,
+      #fisheries)
   
-)
+#)
   
 total <- fed_aqua_prod %>% 
   filter(grepl("shrimp", Species) & Year == 2017) %>%
@@ -238,6 +256,10 @@ fed_aqua_prod %>%
 
 
  # CHina India INdonesia Vietnam Ecuador Thailand
+
+
+
+
 ```
 
 # Figure - Aquaculture production change 
@@ -365,7 +387,7 @@ ggplot(EU, aes(x=Year, y=Prop, colour=Taxa)) +
   ggsave("Proportion of global from the EU incl Norway.tiff", device = "tiff", dpi=300, width = 15, height = 12, units = "cm")  #given EU regulations on by-products include Norway - no point using by products in Salmon as EU/Norway accounts for 60% of global production and a ban was in place
 
 
-#Nis dat for trophic level of forage fish
+#Nis data for trophic level of forage fish
 
 
 #forage_TL <- fread("forage.fish_TL.csv", header=TRUE) 
@@ -513,10 +535,8 @@ aqua_trophic_levels <-
       mutate(Sensitivity = "Spp. comp")
   )
   
-  )
-
-
-
+  ) %>% 
+  write_csv("sector_trophic_levels_sensitivity.csv")
 ```
 
 
@@ -611,7 +631,7 @@ salmon_diet_plot <- ggplot(salmon_diet %>% mutate(Ingredient = factor(Ingredient
 # Taxa trends relative to fishbase
 ```{r}
 
-(salmons <- common_to_sci(c("Atlantic salmon", "Coho salmon", "Chinook salmon")) %>% slice(1,4,5))
+(salmons <- rfishbase::common_to_sci(c("Atlantic salmon", "Coho salmon", "Chinook salmon")) %>% slice(1,4,5))
 (trouts <- rfishbase::common_to_sci(c("Rainbow trout", "Clearhead icefish")) %>% slice(2,3))
 carps <- rfishbase::common_to_sci("Grass carp", "Common carp")$Species
 (tilapias <- rfishbase::common_to_sci("Nile tilapia"))
@@ -779,8 +799,11 @@ FCRs <- fread("eFCRs.csv", header=TRUE)
   left_join(total_prod_year, by="Year") %>% 
   mutate(MTL = TL_taxon_year*Prod/Total_prod) %>% 
     left_join(FCRs, by=c("Taxa", "Year"))
-)
-
+)  
+  
+tl_export <- trophic_levels %>% 
+  select(Taxa, Year, Prod, FMFO_inclusion, Animal_inclusion, Crop_inclusion, Total_prod, TL_taxon_year) %>% 
+  write_csv("taxon_TLs.csv")
 
 
 TL_FCR_plot <- ggplot(trophic_levels %>% filter(Year %in% c(1995, 2000, 2010)) %>% mutate(Year= factor(Year, levels = (c("1995", "2000",  "2010")))), 
