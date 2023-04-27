@@ -1,0 +1,31 @@
+Ingredient,time,percnt_in
+micro,1990,0.001
+starch,1990,0.096
+plant oil,1990,0
+plant protein,1990,0
+marine oil,1990,0.24
+marine protein,1990,0.654
+micro,2000,0.002
+starch,2000,0.112
+plant oil,2000,0
+plant protein,2000,0.222
+marine oil,2000,0.311
+marine protein,2000,0.335
+micro,2010,0.022
+starch,2010,0.084
+plant oil,2010,0.125
+plant protein,2010,0.355
+marine oil,2010,0.166
+marine protein,2010,0.248
+micro,2012,0.031
+starch,2012,0.111
+plant oil,2012,0.183
+plant protein,2012,0.367
+marine oil,2012,0.112
+marine protein,2012,0.195
+micro,2013,0.037
+starch,2013,0.112
+plant oil,2013,0.192
+plant protein,2013,0.367
+marine oil,2013,0.109
+marine protein,2013,0.183
