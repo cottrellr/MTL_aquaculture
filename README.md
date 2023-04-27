@@ -10,7 +10,10 @@ However - trophic level calculations for aquaculture taxa are available and repr
 - The entire fed sector ("data/outputs/sector_trophic_levels_sensitivity.csv"") - filter by "All variables" (see Figure 1 in paper)
 - Individual taxa ("data/outputs/taxon_TLs.csv")
 
-# Scripts (description to come)
+| Scripts | Description                               |
+|---------|-------------------------------------------|
+|1_test_fishlife.R | Query fishbase for trophic levels of forage fish |
+|2_MTL_analayses.Rmd | Calculate effective trophic levels for aggregate fed aquaculture and by taxon|
 
 
 
