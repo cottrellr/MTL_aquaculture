@@ -12,7 +12,7 @@ However - trophic level calculations for aquaculture taxa are available and repr
 
 | Scripts | Description                               |
 |---------|-------------------------------------------|
-|1_test_fishlife.R | Query fishbase for trophic levels of forage fish |
+|1_calcTL.R | Query fishbase for trophic levels of forage fish |
 |2_MTL_analayses.Rmd | Calculate effective trophic levels for aggregate fed aquaculture and by taxon|
 
 
